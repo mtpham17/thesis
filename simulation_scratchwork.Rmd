@@ -186,13 +186,15 @@ result <- analyze(test, 5)
 one_run <- function() {
   dat <- generate_data(params)
   analyze(dat)
+  return(0)
 }
-results <- rerun(R, one_run())
-results <- bind_rows(results)
+# results <- rerun(R, one_run())
+# results <- bind_rows(results)
 
 # Summarize
 assess_performance <- function(results) {
   # stuff
+  return(0)
 }
 ```
 

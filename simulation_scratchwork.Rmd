@@ -39,14 +39,14 @@ length(unique(unique(y1_child_obs_raw[, "classid"])))
 
 
 # need to find a minimum lambda value that we can start from, since too small of a lambda value returns a message about the matrix not being invertible
-min_lambda <- function(train_data, formula, rand=list(j=~1)) {
+min_lambda <- function(data, formula, rand=list(j=~1)) {
   failed <- TRUE
   lambda_min <- 0.01
   repeat {
 
   failed <- tryCatch(
       {
-        glmmLasso(fix = formula, rnd = rand, data = train_data, 
+        glmmLasso(fix = formula, rnd = rand, data = data, 
             lambda = lambda_min)
       },
       error = function(e){
@@ -70,40 +70,63 @@ min_lambda <- function(train_data, formula, rand=list(j=~1)) {
 # cross validation helper function for the glmmLasso
 # need to eventually do this with k-folds, or get as close to the 
 # cross validation that is happening in the regular lasso
-cv_glmmLasso <- function(train_data, formula, criterion, rand=list(j=~1),
-                         lambda_step=50) {
+
+library(MASS)
+library(nlme)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+# https://rdrr.io/cran/glmmLasso/src/demo/glmmLasso-soccer.r
+cv_glmmLasso <- function(data, formula, rand=list(j=~1),
+                         lambda_step=80) {
+  min_lambda <- min_lambda(data, formula) 
   
-  BIC <- rep(NA, lambda_step)
-  AIC <- rep(NA, lambda_step)
-  pred_error <- rep(NA, lambda_step)
-  coefficients <- NULL
-  min_lambda <- min_lambda(train_data, formula)
+  lambdas <- seq(from=min_lambda, to=50, 
+                 by=(50 - min_lambda) / lambda_step)
+  # print(lambdas)
   
-  lambdas <- seq(from=min_lambda, to=100, 
-                 by=(100 - min_lambda) / lambda_step)
+  set.seed(2022)
+  
+  N <- dim(data)[1]
+  ind <- sample(N, N)
+  
+  # number of folds
+  
+  kk <- 5
+  nk <- floor(N/kk)
+  
+  pred_error <- matrix(NA, ncol=kk, nrow = lambda_step)
+
   
   for (j in 1:lambda_step) {
     # print(paste("Iteration", j))
-    mixed_lasso <- glmmLasso(fix = formula, rnd = rand, data = train_data, 
-              lambda = lambdas[j])
-    BIC[j] <- mixed_lasso$bic
-    AIC[j] <- mixed_lasso$aic
-    coefficients <- cbind(coefficients, mixed_lasso$coefficients)
     
-    y_hat <- predict(mixed_lasso, train_data)
-    pred_error[j] <- sum((y_hat - train_data$Y)^2)
+    for (i in 1:kk)
+    {
+      if (i < kk) {
+      indi <- ind[(i-1)*nk+(1:nk)]
+      }
+      else {
+      indi <- ind[((i-1)*nk+1):N]
+      }
+  
+    data_train <- data[-indi,]
+    data_test <-data[indi,]
+  
+    glm <- try(glmmLasso(fix = formula, rnd = rand, data = data_train, 
+              lambda = lambdas[j]), silent = TRUE) 
+            
+        if(!inherits(glm, "try-error"))
+        {  
+          y_hat<-predict(glm, data_test)  
+          pred_error[j,i]<- sqrt(sum((data_test$Y - y_hat)^2) / nrow(data_test))
+        }
+    }
   }
   
-  if (criterion == "AIC") {
-    return(lambdas[which.min(AIC)])
-  }
-  
-  if (criterion == "BIC") {
-    return(lambdas[which.min(BIC)])
-  }
-  
-  return(lambdas[which.min(pred_error)])
-  
+  # find lambda which gives lowest prediction error
+  pred_error_vec <- apply(pred_error, 1, sum)
+  # print(pred_error_vec)
+  return(lambdas[which.min(pred_error_vec)])  
 }
 ```
 
@@ -137,7 +160,6 @@ generate_data <- function(m, j, sigma_r, n=100) {
   data$j <- as.factor(rep(1:j, each=n/j))
   return(data)
 }
-test <- generate_data(5, 2, 0.4, n=4)
 ```
 
 
@@ -146,48 +168,52 @@ test <- generate_data(5, 2, 0.4, n=4)
 # Analyze
 analyze <- function(data, m) {
   # need to do cross validation for LASSO
-  train_df <- data[1:(0.80 * nrow(data)), ]
   var.names <- paste("X", 1:m, sep = "")
   com.names <- lapply(seq_along(var.names),
                     function(i) combn(var.names, i, FUN = paste, collapse = " + "))
   covariates <- com.names[[m]]
   X_fixed <- model.matrix(as.formula(paste("Y ~", covariates)),
-                          data = train_df)
+                          data = data)
   X_fixed <- X_fixed[, -1]
-  Y <- train_df$Y
+  Y <- data$Y
 
   # call cv.glmnet()
-  model_lasso_fixed <- cv.glmnet(x = X_fixed, y = Y, alpha = 1)
+  model_lasso_fixed <- cv.glmnet(x = X_fixed, y = Y, nfolds = 5, alpha = 1)
   cc <- coef(model_lasso_fixed, s = model_lasso_fixed$lambda.min)
   #placeholder lambda value
   coefficients_fixed <- coef(model_lasso_fixed)
   
   
-  lambda_min <- cv_glmmLasso(train_data = train_df, 
-                             formula = as.formula(paste("Y ~", covariates)),
-                             criterion = "pred_error")
-  model_lasso_mixed <- glmmLasso(fix = as.formula(paste("Y ~", covariates)), 
+  lambda_min <- cv_glmmLasso(data = data,
+                             formula = as.formula(paste("Y ~", covariates)))
+  model_lasso_mixed <- glmmLasso(fix = as.formula(paste("Y ~", covariates)),
                                                      rnd=list(j=~1),
-                                                    data = train_df,
+                                                    data = data,
                                                      lambda=lambda_min)
-  
+
   coefficients_mixed <- model_lasso_mixed$coefficients
   coefficients <- cbind(as.matrix(coefficients_fixed), as.matrix(coefficients_mixed))
   colnames(coefficients) <- c("fixed", "mixed")
   coefs_df <- as.data.frame(coefficients[2:nrow(coefficients), ])
-  return(coefs_df)
+  
+  # "the two models agreed on ___ percent of the covariates 
+  
+  return(sum(coefs_df$fixed !=0 & coefs_df$mixed !=0) / nrow(coefs_df))
 }
-result <- analyze(test, 5)
+
 ```
 
 
 ```{r}
 # Repeat
-one_run <- function() {
-  dat <- generate_data(params)
-  analyze(dat)
-  return(0)
+one_run <- function(m, j, sigma_r, n=100) {
+  print(m)
+  dat <- generate_data(m, j, sigma_r, n=100)
+  result <- analyze(dat, m)
+  return(c(m, j, sigma_r, n, result))
 }
+
+one_run(10, 5, 2)
 # results <- rerun(R, one_run())
 # results <- bind_rows(results)
 
@@ -197,6 +223,3 @@ assess_performance <- function(results) {
   return(0)
 }
 ```
-
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

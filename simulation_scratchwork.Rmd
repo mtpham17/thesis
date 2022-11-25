@@ -130,11 +130,11 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
 }
 ```
 
-```{r}
+```{r, warnings=FALSE}
 # Generate
 # m -- number of covariates, j -- number of clusters, sigma_r -- variance of 
 # different intercepts
-generate_data <- function(m, j, sigma_r, n=100) {
+generate_data <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
   # j -- number of clusters
   colnames_df <- c(paste("X", 1:m, sep = ""), "random_beta") 
   # covariance matrix
@@ -142,12 +142,13 @@ generate_data <- function(m, j, sigma_r, n=100) {
   # Sigma[outer(1:j, 1:j, function(x, y) x != y)] <- rho
   # generate j random betas (random slopes)
   random_beta <- rnorm(n=j, mean=0, sigma_r)
+  
+  fixed_beta <- c(rep(min_beta, beta_strength*m), rep(1, (1 - beta_strength) * m))
   df <- matrix(nrow=n)
   # generate X_j
   for (i in 1:m) {
     df <- cbind(df, rnorm(n))
   }
-  
   # first column is NA for some reason, definitely need to clean this up later.
   df <- df[, -1]
   data <- as.data.frame(df)
@@ -156,10 +157,12 @@ generate_data <- function(m, j, sigma_r, n=100) {
   colnames(data) <- colnames_df
   # error term
   epsilon <- rnorm(n)
-  data$Y <- rowSums(data[, 1:(m + 1)]) + epsilon
+  data$Y <- rowSums(sweep(data[, 1:m], 2, fixed_beta, "*")) + random_beta + epsilon
   data$j <- as.factor(rep(1:j, each=n/j))
   return(data)
 }
+
+generate_data(4, 5, 0.5, 0.1, 0.3, n=10)
 ```
 
 
@@ -212,6 +215,13 @@ one_run <- function(m, j, sigma_r, n=100) {
   result <- analyze(dat, m)
   return(c(m, j, sigma_r, n, result))
 }
+
+# sigma_r -- clusters are further and further apart
+# first step -- "the clusters are just adding noise" -- have weak beta (slopes) and alter sigma_r
+# eventually work up to using covariates directly from data
+# next step -- correlate the intercepts with the covariates -- do this after you get the whole simulation going
+
+# if you keep getting weird results with the simulation, email dataset and short script to groll@statistik.tu-dortmund.de
 
 one_run(10, 5, 2)
 # results <- rerun(R, one_run())

@@ -143,7 +143,7 @@ generate_data <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
   # generate j random betas (random slopes)
   random_beta <- rnorm(n=j, mean=0, sigma_r)
   
-  fixed_beta <- c(rep(min_beta, beta_strength*m), rep(1, (1 - beta_strength) * m))
+  fixed_beta <- c(rep(min_beta, (1 - beta_strength) * m), rep(1, beta_strength*m))
   df <- matrix(nrow=n)
   # generate X_j
   for (i in 1:m) {
@@ -169,7 +169,7 @@ generate_data(4, 5, 0.5, 0.1, 0.3, n=10)
 
 ```{r}
 # Analyze
-analyze <- function(data, m) {
+analyze <- function(data, m, fixed_beta) {
   # need to do cross validation for LASSO
   var.names <- paste("X", 1:m, sep = "")
   com.names <- lapply(seq_along(var.names),
@@ -201,7 +201,14 @@ analyze <- function(data, m) {
   
   # "the two models agreed on ___ percent of the covariates 
   
-  return(sum(coefs_df$fixed !=0 & coefs_df$mixed !=0) / nrow(coefs_df))
+  agreement <- sum(coefs_df$fixed !=0 & coefs_df$mixed !=0) / nrow(coefs_df)
+  
+  # also want to measure the accuracy of both
+  
+  fixed_accuracy <- sqrt(sum((coefs_df$fixed - fixed_beta)^2) / nrow(coefs_df))
+  mixed_accuracy <- sqrt(sum((coefs_df$mixed - fixed_beta)^2) / nrow(coefs_df))
+  
+  return(c(agreement, fixed_accuracy, mixed_accuracy))
 }
 
 ```
@@ -209,11 +216,12 @@ analyze <- function(data, m) {
 
 ```{r}
 # Repeat
-one_run <- function(m, j, sigma_r, n=100) {
+one_run <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
   print(m)
-  dat <- generate_data(m, j, sigma_r, n=100)
-  result <- analyze(dat, m)
-  return(c(m, j, sigma_r, n, result))
+  dat <- generate_data(m, j, beta_strength, min_beta, sigma_r, n)
+  fixed_beta <- c(rep(min_beta, beta_strength*m), rep(1, (1 - beta_strength) * m))
+  result <- analyze(dat, m, fixed_beta)
+  return(c(m, j, beta_strength, min_beta, sigma_r, n, result))
 }
 
 # sigma_r -- clusters are further and further apart
@@ -223,9 +231,37 @@ one_run <- function(m, j, sigma_r, n=100) {
 
 # if you keep getting weird results with the simulation, email dataset and short script to groll@statistik.tu-dortmund.de
 
-one_run(10, 5, 2)
-# results <- rerun(R, one_run())
-# results <- bind_rows(results)
+rerun_single_params <- function(runs, m, j, beta_strength, min_beta, sigma_r, n=100) {
+  results <- rerun(runs, one_run(m=10, j=2, beta_strength=0, 
+                                 min_beta=0.1, sigma_r=0.2, n=20))
+  mean_agreement <- mean(unlist(lapply(results, function (x) x[7])))
+  sd_agreement <- sd(unlist(lapply(results, function (x) x[7])))
+  
+  mean_accuracy_fixed <- mean(unlist(lapply(results, function (x) x[8])))
+  sd_accuracy_fixed <- sd(unlist(lapply(results, function (x) x[8])))
+  
+  mean_accuracy_mixed <- mean(unlist(lapply(results, function (x) x[9])))
+  sd_accuracy_mixed <- sd(unlist(lapply(results, function (x) x[9])))
+  
+  row <- c(m, j, beta_strength, min_beta, sigma_r, n, runs, 
+           mean_agreement, sd_agreement, mean_accuracy_fixed, sd_accuracy_fixed,
+           mean_accuracy_mixed, sd_accuracy_mixed)
+  names(row) <- c("m", "j", "beta_strength", "min_beta", "sigma_r", "n", "reps",
+                  "mean_agreement", "sd_agreement", "mean_acc_fixed", "sd_acc_fixed",
+                  "mean_acc_mixed", "sd_acc_mixed")
+  
+  return(row)
+}
+
+
+rerun_mult_parameters <- function(runs, m_vec, j_vec, beta_strength_vec, 
+                                  min_beta_vec, sigma_r_vec, n_vec) {
+  
+  # test every possible combination of parameters, execute "runs" times
+  # summarize everything in a data frame
+  
+}
+
 
 # Summarize
 assess_performance <- function(results) {

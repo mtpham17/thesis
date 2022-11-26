@@ -84,8 +84,6 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
                  by=(50 - min_lambda) / lambda_step)
   # print(lambdas)
   
-  set.seed(2022)
-  
   N <- dim(data)[1]
   ind <- sample(N, N)
   
@@ -126,6 +124,7 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
   # find lambda which gives lowest prediction error
   pred_error_vec <- apply(pred_error, 1, sum)
   # print(pred_error_vec)
+  print(paste("min lambda:", lambdas[which.min(pred_error_vec)]))
   return(lambdas[which.min(pred_error_vec)])  
 }
 ```
@@ -135,8 +134,14 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
 # m -- number of covariates, j -- number of clusters, sigma_r -- variance of 
 # different intercepts
 generate_data <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
-  # j -- number of clusters
+  # m <- unname(df[2])
+  # j <- unname(df[3])
+  # beta_strength <- unname(df[4])
+  # min_beta <- unname(df[5])
+  # sigma_r <- unname(df[6])
+  # n <- unname(df[7])
   colnames_df <- c(paste("X", 1:m, sep = ""), "random_beta") 
+  print(colnames_df)
   # covariance matrix
   # Sigma <- diag(j)
   # Sigma[outer(1:j, 1:j, function(x, y) x != y)] <- rho
@@ -144,6 +149,7 @@ generate_data <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
   random_beta <- rnorm(n=j, mean=0, sigma_r)
   
   fixed_beta <- c(rep(min_beta, (1 - beta_strength) * m), rep(1, beta_strength*m))
+  # print(fixed_beta)
   df <- matrix(nrow=n)
   # generate X_j
   for (i in 1:m) {
@@ -159,10 +165,10 @@ generate_data <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
   epsilon <- rnorm(n)
   data$Y <- rowSums(sweep(data[, 1:m], 2, fixed_beta, "*")) + random_beta + epsilon
   data$j <- as.factor(rep(1:j, each=n/j))
+  print("generated data")
   return(data)
 }
 
-generate_data(4, 5, 0.5, 0.1, 0.3, n=10)
 ```
 
 
@@ -185,6 +191,7 @@ analyze <- function(data, m, fixed_beta) {
   cc <- coef(model_lasso_fixed, s = model_lasso_fixed$lambda.min)
   #placeholder lambda value
   coefficients_fixed <- coef(model_lasso_fixed)
+  print(paste("fixed coefficients:", coefficients_fixed))
   
   
   lambda_min <- cv_glmmLasso(data = data,
@@ -195,6 +202,7 @@ analyze <- function(data, m, fixed_beta) {
                                                      lambda=lambda_min)
 
   coefficients_mixed <- model_lasso_mixed$coefficients
+  print(paste("mixed coefficients:", coefficients_mixed))
   coefficients <- cbind(as.matrix(coefficients_fixed), as.matrix(coefficients_mixed))
   colnames(coefficients) <- c("fixed", "mixed")
   coefs_df <- as.data.frame(coefficients[2:nrow(coefficients), ])
@@ -217,7 +225,6 @@ analyze <- function(data, m, fixed_beta) {
 ```{r}
 # Repeat
 one_run <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
-  print(m)
   dat <- generate_data(m, j, beta_strength, min_beta, sigma_r, n)
   fixed_beta <- c(rep(min_beta, beta_strength*m), rep(1, (1 - beta_strength) * m))
   result <- analyze(dat, m, fixed_beta)
@@ -231,9 +238,14 @@ one_run <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
 
 # if you keep getting weird results with the simulation, email dataset and short script to groll@statistik.tu-dortmund.de
 
-rerun_single_params <- function(runs, m, j, beta_strength, min_beta, sigma_r, n=100) {
-  results <- rerun(runs, one_run(m=10, j=2, beta_strength=0, 
-                                 min_beta=0.1, sigma_r=0.2, n=20))
+rerun_single_params <- function(df) {
+  print("starting an iteration")
+  results <- rerun(unname(df[1]), one_run(m = unname(df[2]), 
+                                          j = unname(df[3]), 
+                                          beta_strength = unname(df[4]),
+                                          min_beta = unname(df[5]), 
+                                          sigma_r = unname(df[6]),
+                                          n = unname(df[7])))
   mean_agreement <- mean(unlist(lapply(results, function (x) x[7])))
   sd_agreement <- sd(unlist(lapply(results, function (x) x[7])))
   
@@ -243,7 +255,8 @@ rerun_single_params <- function(runs, m, j, beta_strength, min_beta, sigma_r, n=
   mean_accuracy_mixed <- mean(unlist(lapply(results, function (x) x[9])))
   sd_accuracy_mixed <- sd(unlist(lapply(results, function (x) x[9])))
   
-  row <- c(m, j, beta_strength, min_beta, sigma_r, n, runs, 
+  row <- c(unname(df[2]), unname(df[3]), unname(df[4]), unname(df[5]), 
+           unname(df[6]), unname(df[7]), unname(df[8]), 
            mean_agreement, sd_agreement, mean_accuracy_fixed, sd_accuracy_fixed,
            mean_accuracy_mixed, sd_accuracy_mixed)
   names(row) <- c("m", "j", "beta_strength", "min_beta", "sigma_r", "n", "reps",
@@ -254,13 +267,23 @@ rerun_single_params <- function(runs, m, j, beta_strength, min_beta, sigma_r, n=
 }
 
 
-rerun_mult_parameters <- function(runs, m_vec, j_vec, beta_strength_vec, 
+rerun_mult_parameters <- function(runs_vec, m_vec, j_vec, beta_strength_vec, 
                                   min_beta_vec, sigma_r_vec, n_vec) {
+  combos <- expand.grid(runs = runs_vec, m = m_vec, j = j_vec, 
+                        beta_strength = beta_strength_vec, 
+                        min_beta = min_beta_vec, sigma_r = sigma_r_vec, n = n_vec)
+  results <- apply(combos, 1, rerun_single_params)
   
-  # test every possible combination of parameters, execute "runs" times
-  # summarize everything in a data frame
+  return(results)
   
 }
+
+set.seed(17)
+
+rerun_mult_parameters(runs_vec = 2, m_vec = c(2, 4), j_vec = 4,
+                      beta_strength_vec = 0.5, min_beta_vec = 0.4, 
+                      sigma_r_vec = 0.2, n_vec = 100)
+
 
 
 # Summarize

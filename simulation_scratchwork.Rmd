@@ -141,7 +141,7 @@ generate_data <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
   # sigma_r <- unname(df[6])
   # n <- unname(df[7])
   colnames_df <- c(paste("X", 1:m, sep = ""), "random_beta") 
-  print(colnames_df)
+  # print(colnames_df)
   # covariance matrix
   # Sigma <- diag(j)
   # Sigma[outer(1:j, 1:j, function(x, y) x != y)] <- rho
@@ -191,7 +191,7 @@ analyze <- function(data, m, fixed_beta) {
   cc <- coef(model_lasso_fixed, s = model_lasso_fixed$lambda.min)
   #placeholder lambda value
   coefficients_fixed <- coef(model_lasso_fixed)
-  print(paste("fixed coefficients:", coefficients_fixed))
+  # print(paste("fixed coefficients:", coefficients_fixed))
   
   
   lambda_min <- cv_glmmLasso(data = data,
@@ -202,7 +202,7 @@ analyze <- function(data, m, fixed_beta) {
                                                      lambda=lambda_min)
 
   coefficients_mixed <- model_lasso_mixed$coefficients
-  print(paste("mixed coefficients:", coefficients_mixed))
+  print("generated coefficients")
   coefficients <- cbind(as.matrix(coefficients_fixed), as.matrix(coefficients_mixed))
   colnames(coefficients) <- c("fixed", "mixed")
   coefs_df <- as.data.frame(coefficients[2:nrow(coefficients), ])

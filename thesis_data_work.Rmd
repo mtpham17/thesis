@@ -15,6 +15,7 @@ library(glmnet)
 library(caret)
 library(fastDummies)
 library(glmmLasso)
+knitr::opts_knit$set(root.dir = '/Users/thupham/Desktop/senior-yr/thesis/elsah-coptop')
 # library(hrbrthemes)
 # library(ggthemes)
 # library(extrafont)
@@ -49,6 +50,7 @@ For each child in the COP data, we calculate:
 3) The class standard deviation for each indicator *omitting* the child her/himself (only including children with 10 or more sweeps)
 
 We then calculate the class average of the TOP indicators for the adults in the class by averaging across sweeps, and merge this data (one to many) with the child-level data. This merged data set contains XXX children in XXX classes
+
 
 ```{r y1_obs, warning=FALSE, cache=TRUE}
 #Input the Year One long child and teacher observation data 

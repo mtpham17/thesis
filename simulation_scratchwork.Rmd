@@ -305,7 +305,7 @@ set.seed(17)
 #                                         n_vec = 100)
 
 prelim_results <- rerun_mult_parameters(runs_vec = 5,
-                                        m_vec = 4,
+                                        m_vec = c(4, 8),
                                         j_vec = 2,
                                         beta_strength_vec = 0.25,
                                         min_beta_vec = 0.1,

@@ -1,0 +1,73 @@
+---
+title: "glmmlasso_script"
+author: "Thu Pham"
+date: "2022-12-02"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '/Users/thupham/Desktop/senior-yr/thesis/elsah-coptop')
+library(readstata13)
+library(tidyverse)
+library(glmnet)
+library(caret)
+library(fastDummies)
+library(mvtnorm)
+library(dplyr)
+library(glmnet)
+library(glmmLasso)
+```
+
+## R Markdown
+
+scratchwork to investigate how glmmlasso works (and very simple data generating function to help)
+
+
+```{r}
+# basic data generating function
+# explanation of parameter choices:
+
+# mean = 0 and sd = 1 for simplicity (generating covariates)
+# n = 100, pretty standard value for number of observations
+# sigma_r = 8, standard deviation of the random intercepts. set a pretty high value, to emphasize the importance of clustering in this case
+# j = 2, only 2 clusters -- again, for simplicity
+generate_data <- function(mean = 0, j = 2, sd = 1, sigma_r = 8, n = 100) {
+  data <- data.frame(j = as.factor(rep(1:j, each=n/j)),
+                     X1 = rnorm(n=n, mean=mean, sd=sd),
+                     X2 = rnorm(n=n, mean=mean, sd=sd))
+  random_beta <- rnorm(n=j, mean=0, sigma_r)
+  epsilon <- rnorm(n)
+  data$Y <- epsilon + data$X1 + data$X2
+  return(data)
+}
+```
+
+
+```{r}
+
+one_run <- function() {
+  data <- generate_data()
+  # print(data_second_issue)
+  # using a ``safe" value of lambda
+  model_mixed <- glmmLasso(fix = Y ~ X1 + X2, rnd = list(j=~1),
+                               data = data, lambda = 0.001,
+                               final.re = TRUE)
+  X_fixed <- model.matrix(Y ~ X1 + X2, data = data)
+  X_fixed <- X_fixed[, -1]
+  Y <- data$Y
+  model_fixed <- glmnet(X_fixed, Y, alpha = 1, lambda = 0.001)
+  x1_mixed <- as.matrix(model_mixed$coefficients)[2, 1]
+  x1_fixed <- coef(model_fixed)[2, 1]
+  return(x1_mixed)
+}
+
+
+set.seed(300)
+
+# see whether the standard deviation of the coefficients is nonzero 
+# (hopefully it should be)
+unlist(rerun(5, one_run()))
+```
+
+As we can see, the coefficient of 

@@ -250,8 +250,9 @@ rerun_single_params <- function(df) {
            mean_agreement, sd_agreement, mean_accuracy_fixed, sd_accuracy_fixed,
            mean_accuracy_mixed, sd_accuracy_mixed)
   names(row) <- c("m", "j", "beta_strength", "min_beta", "sigma_r", "n", "reps",
-                  "mean_agreement", "sd_agreement", "mean_acc_fixed", "sd_acc_fixed",
-                  "mean_acc_mixed", "sd_acc_mixed")
+                  "mean_agreement", "sd_agreement", 
+                  "mean_error_fixed", "sd_error_fixed",
+                  "mean_error_mixed", "sd_error_mixed")
   
   return(row)
 }
@@ -306,12 +307,23 @@ set.seed(17)
 
 prelim_results <- rerun_mult_parameters(runs_vec = 5,
                                         m_vec = c(4, 8),
-                                        j_vec = 2,
-                                        beta_strength_vec = 0.25,
-                                        min_beta_vec = 0.1,
-                                        sigma_r_vec = 1,
+                                        j_vec = c(2, 10, 20),
+                                        beta_strength_vec = c(0.25, 0.5),
+                                        min_beta_vec = c(0.1, 0.7),
+                                        sigma_r_vec = c(1, 10),
                                         n_vec = 100)
 
 assess_performance(prelim_results)
+```
+```{r}
+df_results <- assess_performance(prelim_results)
+df_results$mixed_better <- df_results$mean_acc_fixed > df_results$mean_acc_mixed
+df_results[df_results$mean_agreement == min(df_results$mean_agreement), ]
+# looking at minimum agreement: larger amounts of clusters, max sigma_r values
+# but the mixed model isn't necessarily more accurate, mostly pretty weak coefficients of fixed effects (also makes sense!)
+df_results[df_results$mean_agreement == max(df_results$mean_agreement), ]
+# description of max
+# mix of small and large clusters (mix of different j values), lowest sigma_r values (makes sense!)
+# when the two agree the most (100%) agreement, the mixed model is more accurate (lower error) in all cases
 ```
 

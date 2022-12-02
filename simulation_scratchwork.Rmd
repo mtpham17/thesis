@@ -19,19 +19,6 @@ library(glmnet)
 library(glmmLasso)
 ```
 
-```{r}
-y1_child_obs_raw <- read.dta13("y1o_c_long.dta")
-y1_teacher_obs_raw <- read.dta13("y1o_t_long.dta")
-y1_coverpage_obs <- read.dta13("y1o_coverpage.dta")
-```
-
-```{r}
-length(unique(unique(y1_child_obs_raw[, "provid"])))
-length(unique(unique(y1_child_obs_raw[, "classid"])))
-# looks like there are some providers with more than one class
-# students nested in classes, classes nested in schools, schools nested in zip codes
-```
-
 
 ```{r}
 # helper functions
@@ -124,9 +111,9 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
   
   # find lambda which gives lowest prediction error
   pred_error_vec <- apply(pred_error, 1, sum)
-  print(pred_error_vec)
   # print(pred_error_vec)
-  print(paste("min lambda:", lambdas[which.min(pred_error_vec)]))
+  # print(pred_error_vec)
+  # print(paste("min lambda:", lambdas[which.min(pred_error_vec)]))
   return(lambdas[which.min(pred_error_vec)])  
 }
 
@@ -167,7 +154,7 @@ generate_data <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
   epsilon <- rnorm(n)
   data$Y <- rowSums(sweep(data[, 1:m], 2, fixed_beta, "*")) + random_beta + epsilon
   data$j <- as.factor(rep(1:j, each=n/j))
-  print("generated data")
+  # print("generated data")
   return(data)
 }
 
@@ -204,7 +191,7 @@ analyze <- function(data, m, fixed_beta) {
                                                      lambda=lambda_min)
 
   coefficients_mixed <- model_lasso_mixed$coefficients
-  print("generated coefficients")
+  # print("generated coefficients")
   coefficients <- cbind(as.matrix(coefficients_fixed), as.matrix(coefficients_mixed))
   colnames(coefficients) <- c("fixed", "mixed")
   coefs_df <- as.data.frame(coefficients[2:nrow(coefficients), ])
@@ -241,8 +228,8 @@ one_run <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
 # if you keep getting weird results with the simulation, email dataset and short script to groll@statistik.tu-dortmund.de
 
 rerun_single_params <- function(df) {
-  print("starting an iteration")
-  print(df[7])
+  # print("starting an iteration")
+  # print(df[7])
   results <- rerun(unname(df[1]), one_run(m = unname(df[2]), 
                                           j = unname(df[3]), 
                                           beta_strength = unname(df[4]),
@@ -276,12 +263,11 @@ rerun_mult_parameters <- function(runs_vec, m_vec, j_vec, beta_strength_vec,
                         beta_strength = beta_strength_vec, 
                         min_beta = min_beta_vec, sigma_r = sigma_r_vec, n = n_vec)
   results <- apply(combos, 1, rerun_single_params)
+  print("finished one set of parameters")
   
   return(results)
   
 }
-
-set.seed(17)
 
 # test_results <- rerun_mult_parameters(runs_vec = 2, m_vec = c(2, 4), j_vec = 4,
 #                       beta_strength_vec = 0.5, min_beta_vec = 0.4, 
@@ -299,13 +285,32 @@ assess_performance <- function(results) {
 ```{r}
 
 # this took a really long time to run, so maybe wait for a bit
-prelim_results <- rerun_mult_parameters(runs_vec = 100, 
-                                        m_vec = seq(from=4, to=40, by=4),
-                                        j_vec = c(2, 4, 5, 10, 25, 50),
-                                        beta_strength_vec = c(0.25, 0.50, 0.75),
-                                        min_beta_vec = seq(from=0.1, to=0.8, by=0.1),
-                                        sigma_r_vec = seq(from=0.1, to=6, by=0.5),
-                                        n_vec = c(50, 100, 200))
+# prelim_results <- rerun_mult_parameters(runs_vec = 100, 
+#                                         m_vec = seq(from=4, to=40, by=4),
+#                                         j_vec = c(2, 4, 5, 10, 25, 50),
+#                                         beta_strength_vec = c(0.25, 0.50, 0.75),
+#                                         min_beta_vec = seq(from=0.1, to=0.8, by=0.1),
+#                                         sigma_r_vec = seq(from=0.1, to=6, by=0.5),
+#                                         n_vec = c(50, 100, 200))
+
+set.seed(17)
+
+# prelim_results <- rerun_mult_parameters(runs_vec = 5, 
+#                                         m_vec = seq(from=4, to=20, by=8),
+#                                         j_vec = c(2, 10),
+#                                         beta_strength_vec = c(0.25, 0.50),
+#                                         min_beta_vec = seq(from = 0.1, to = 0.9, 
+#                                                            by = 0.4),
+#                                         sigma_r_vec = seq(from = 1, to = 5, by = 2),
+#                                         n_vec = 100)
+
+prelim_results <- rerun_mult_parameters(runs_vec = 5,
+                                        m_vec = 4,
+                                        j_vec = 2,
+                                        beta_strength_vec = 0.25,
+                                        min_beta_vec = 0.1,
+                                        sigma_r_vec = 1,
+                                        n_vec = 100)
 
 assess_performance(prelim_results)
 ```

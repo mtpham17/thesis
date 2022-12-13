@@ -133,15 +133,18 @@ cv_glmmLasso(data, Y ~ X1 + X2 + X3 + X4 + X5)
 
 ## TO DO: different strengths of beta coefficients?
 
-generate_data <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
+# change m to p (conventions)
+
+generate_data <- function(p, j, beta_strength, min_beta, sigma_r, n=100) {
   colnames_df <- c(paste("X", 1:m, sep = ""), "random_beta") 
   random_beta <- rnorm(n=j, mean=0, sigma_r)
   
-  fixed_beta <- c(rep(min_beta, (1 - beta_strength) * m), rep(1, beta_strength*m))
+  # make some of these zero
+  fixed_beta <- c(rep(min_beta, (1 - beta_strength) * p), rep(1, beta_strength*p))
   # print(fixed_beta)
   df <- matrix(nrow=n)
   # generate X_j
-  for (i in 1:m) {
+  for (i in 1:p) {
     df <- cbind(df, rnorm(n))
   }
   # first column is NA for some reason, definitely need to clean this up later.
@@ -150,9 +153,13 @@ generate_data <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
   # make this more efficient later
   data <- cbind(data, rep(random_beta, each=n/j))
   colnames(data) <- colnames_df
-  # error term
+  # error term 
   epsilon <- rnorm(n)
-  data$Y <- rowSums(sweep(data[, 1:m], 2, fixed_beta, "*")) + random_beta + epsilon
+  
+  # add a second epsilon for the fixed_betas --> this reflects the reliability of 
+  # beta measurements (relaxing the assumptions of how strong our measures are)
+  
+  data$Y <- rowSums(sweep(data[, 1:p], 2, fixed_beta, "*")) + random_beta + epsilon
   data$j <- as.factor(rep(1:j, each=n/j))
   # print("generated data")
   return(data)
@@ -164,12 +171,12 @@ generate_data <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
 
 ```{r}
 # Analyze
-analyze <- function(data, m, fixed_beta) {
+analyze <- function(data, p, fixed_beta) {
   # need to do cross validation for LASSO
-  var.names <- paste("X", 1:m, sep = "")
+  var.names <- paste("X", 1:p, sep = "")
   com.names <- lapply(seq_along(var.names),
                     function(i) combn(var.names, i, FUN = paste, collapse = " + "))
-  covariates <- com.names[[m]]
+  covariates <- com.names[[p]]
   X_fixed <- model.matrix(as.formula(paste("Y ~", covariates)),
                           data = data)
   X_fixed <- X_fixed[, -1]
@@ -213,11 +220,11 @@ analyze <- function(data, m, fixed_beta) {
 
 ```{r}
 # Repeat
-one_run <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
-  dat <- generate_data(m, j, beta_strength, min_beta, sigma_r, n)
-  fixed_beta <- c(rep(min_beta, beta_strength*m), rep(1, (1 - beta_strength) * m))
-  result <- analyze(dat, m, fixed_beta)
-  return(c(m, j, beta_strength, min_beta, sigma_r, n, result))
+one_run <- function(p, j, beta_strength, min_beta, sigma_r, n=100) {
+  dat <- generate_data(p, j, beta_strength, min_beta, sigma_r, n)
+  fixed_beta <- c(rep(min_beta, beta_strength*p), rep(1, (1 - beta_strength) * p))
+  result <- analyze(dat, p, fixed_beta)
+  return(c(p, j, beta_strength, min_beta, sigma_r, n, result))
 }
 
 # sigma_r -- clusters are further and further apart
@@ -230,7 +237,7 @@ one_run <- function(m, j, beta_strength, min_beta, sigma_r, n=100) {
 rerun_single_params <- function(df) {
   # print("starting an iteration")
   # print(df[7])
-  results <- rerun(unname(df[1]), one_run(m = unname(df[2]), 
+  results <- rerun(unname(df[1]), one_run(p = unname(df[2]), 
                                           j = unname(df[3]), 
                                           beta_strength = unname(df[4]),
                                           min_beta = unname(df[5]), 
@@ -249,7 +256,7 @@ rerun_single_params <- function(df) {
            unname(df[6]), unname(df[7]), unname(df[1]), 
            mean_agreement, sd_agreement, mean_accuracy_fixed, sd_accuracy_fixed,
            mean_accuracy_mixed, sd_accuracy_mixed)
-  names(row) <- c("m", "j", "beta_strength", "min_beta", "sigma_r", "n", "reps",
+  names(row) <- c("p", "j", "beta_strength", "min_beta", "sigma_r", "n", "reps",
                   "mean_agreement", "sd_agreement", 
                   "mean_error_fixed", "sd_error_fixed",
                   "mean_error_mixed", "sd_error_mixed")
@@ -258,9 +265,9 @@ rerun_single_params <- function(df) {
 }
 
 
-rerun_mult_parameters <- function(runs_vec, m_vec, j_vec, beta_strength_vec, 
+rerun_mult_parameters <- function(runs_vec, p_vec, j_vec, beta_strength_vec, 
                                   min_beta_vec, sigma_r_vec, n_vec) {
-  combos <- expand.grid(runs = runs_vec, m = m_vec, j = j_vec, 
+  combos <- expand.grid(runs = runs_vec, p = p_vec, j = j_vec, 
                         beta_strength = beta_strength_vec, 
                         min_beta = min_beta_vec, sigma_r = sigma_r_vec, n = n_vec)
   results <- apply(combos, 1, rerun_single_params)
@@ -306,7 +313,7 @@ set.seed(17)
 #                                         n_vec = 100)
 
 prelim_results <- rerun_mult_parameters(runs_vec = 5,
-                                        m_vec = c(4, 8),
+                                        p_vec = c(4, 8),
                                         j_vec = c(2, 10, 20),
                                         beta_strength_vec = c(0.25, 0.5),
                                         min_beta_vec = c(0.1, 0.7),

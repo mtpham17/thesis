@@ -120,50 +120,123 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
 cv_glmmLasso(data, Y ~ X1 + X2 + X3 + X4 + X5)
 ```
 
-```{r, warnings=FALSE}
-# Generate
-# m -- number of covariates, j -- number of clusters, sigma_r -- variance of 
-# different intercepts
 
-# beta strength -- 0 to 1, indicates the proportion of beta coefficient that is 1
+```{r}
+# beta generator function, following Trevor Hastie, Robert Tibshirani, Ryan Tibshirani
 
-## TO DO: NEED TO INTRODUCE SOME WAY TO CORRELATE THE CLUSTERS WITH THE BETA COEFFICIENTS
+# we are excluding the intercept from this definition of beta
 
-## TO DO: NEED TO FIND SOME WAY TO MAKE UNEVENLY SIZED CLUSTERS
 
-## TO DO: different strengths of beta coefficients?
+# type = one of c(1, 2, 3, 5) -- to specify the type of beta vector we will have.
+# p = number of predictors (also the number of betas)
+# s = number of beta's that follow the setup given in the paper
+# default = value that the s components take on
 
-# change m to p (conventions)
+# beta-type 1: \beta's have s components equal to (default), occurring at (roughly) equal spaced indices between 1 and p, and the rest equal to 0
+# beta-type 2: \beta has its first s components equal to 1, and the rest equal to 0
+# beta-type 3: \beta has its first s components, taking nonzero values equally spaced between 10 and 0.5, and the rest equal to 0
+# added back in beta-type 4 (the Ryan paper excluded it because they got similar results, but I'm running a slightly different simulation): \beta has its first s components, taking nonzero values equally spaced between -10 and 10, and the rest equal to 0 
+# beta-type 5: \beta has its first s components equal to 1, and the rest decaying exponentially to 0, specifically \beta_i = 0.5^{i - s}, for i = s + 1, ..., p
 
-generate_data <- function(p, j, beta_strength, min_beta, sigma_r, n=100) {
-  colnames_df <- c(paste("X", 1:m, sep = ""), "random_beta") 
+generate_beta <- function(type, p, s, default = 1) {
+  if (type == 1) {
+    # create roughly spaced indices, we want s betas to have a value of 1
+    indices <- seq(from = 1, to = p, 
+                   by = ceiling(p / s))
+    betas <- rep(NA, p)
+    betas[indices] <- 1
+    betas[-indices] <- 0
+    return(betas)
+  }
+  
+  if (type == 2) {
+    return(c(rep(default, s), rep(0, p - s)))
+  }
+  
+  if (type == 3) {
+    return(c(seq(from = -10, to = 0.5, by = 20 / s), 
+             rep(0, p - s)))
+  }
+  
+  if (type == 4) {
+    return(c(seq(from = -10, to = 10, by = 20 / s), 
+             rep(0, p - s)))
+
+  }
+  
+  return(c(rep(default, s), 0.5^seq(s + 1, p)))
+  
+}
+```
+
+```{r generate_data, warnings=FALSE}
+
+## DESCRIPTION OF INPUTS
+# type, p, s, default are all the arguments that are taken in by generate_beta
+# cov_x = covariance between covariates
+# mean_x = mean of covariates
+# sigma_x = standard deviation of covariate distribution
+# cov_rand_fixed = covariance between clusters and fixed beta coefficients (will probably have to modify the generate_beta function? may be a question for Luke)
+# mean_r = mean of random intercepts
+# sigma_r = standard deviation of random intercepts
+
+## TODO: NEED TO INTRODUCE SOME WAY TO CORRELATE THE CLUSTERS WITH THE BETA COEFFICIENTS
+
+## TODO: NEED TO FIND SOME WAY TO MAKE UNEVENLY SIZED CLUSTERS
+
+# should the noise due to measurement have correlations between them? probably not right?
+
+generate_data <- function(j, n = 100, 
+                          type, p, s, default,
+                          cov_x, mean_x = 0, sigma_x = 1, 
+                          cov_rand_fixed,
+                          mean_r = 0, sigma_r, 
+                          mean_noise = 0, sigma_noise = 1) {
+  colnames_df <- c(paste("X", 1:p, sep = ""), "random_beta") 
   random_beta <- rnorm(n=j, mean=0, sigma_r)
   
   # make some of these zero
-  fixed_beta <- c(rep(min_beta, (1 - beta_strength) * p), rep(1, beta_strength*p))
-  # print(fixed_beta)
-  df <- matrix(nrow=n)
-  # generate X_j
-  for (i in 1:p) {
-    df <- cbind(df, rnorm(n))
-  }
-  # first column is NA for some reason, definitely need to clean this up later.
-  df <- df[, -1]
-  data <- as.data.frame(df)
-  # make this more efficient later
-  data <- cbind(data, rep(random_beta, each=n/j))
+  fixed_beta <- generate_beta(type, p, s, default)
+  print("fixed beta:")
+  print(fixed_beta)
+  
+  sigma <- diag(sigma_x^2, p, p)
+  sigma[outer(1:p, 1:p, function(i,j) i!=j)] <- cov_x
+  x_all <- rmvnorm(n = n, mean = rep(mean_x, p), sigma)
+  print(x_all)
+  
+  data <- as.data.frame(cbind(x_all, rep(random_beta, each = n/j)))
   colnames(data) <- colnames_df
+  print(data)
+  
   # error term 
   epsilon <- rnorm(n)
+  print("epsilon")
+  print(epsilon)
   
-  # add a second epsilon for the fixed_betas --> this reflects the reliability of 
-  # beta measurements (relaxing the assumptions of how strong our measures are)
+  # now, relaxing the assumption of how strong our measures are. per Luke's suggestion,
+  # add the noise into the covariates so that we preserve the structure from earlier.
   
-  data$Y <- rowSums(sweep(data[, 1:p], 2, fixed_beta, "*")) + random_beta + epsilon
+  ## TODO: somehow need to incorporate the \mu_j into the \mu_{ij} (per Luke's suggestion)
+  
+  measurement_noise <- rmvnorm(n = n, mean = rep(0, p), diag(sigma_noise^2, p, p))
+  print("measurement noise:")
+  print(measurement_noise)
+  
+  measured_x <- x_all + measurement_noise
+  print("measured x:")
+  print(measured_x)
+  
+  data$Y <- rowSums(sweep(measured_x, 2, fixed_beta, "*")) + random_beta + epsilon
   data$j <- as.factor(rep(1:j, each=n/j))
   # print("generated data")
   return(data)
 }
+
+generate_data(j = 2, n = 10, 
+              type = 1, p = 5, s = 3, default = 1, 
+              cov_x = 0.5, mean_x = 0, sigma_x = 1, 
+              cov_rand_fixed = 0, mean_r = 0, sigma_r = 2)
 
 ```
 

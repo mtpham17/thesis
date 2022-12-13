@@ -197,22 +197,16 @@ generate_data <- function(j, n = 100,
   
   # make some of these zero
   fixed_beta <- generate_beta(type, p, s, default)
-  print("fixed beta:")
-  print(fixed_beta)
   
   sigma <- diag(sigma_x^2, p, p)
   sigma[outer(1:p, 1:p, function(i,j) i!=j)] <- cov_x
   x_all <- rmvnorm(n = n, mean = rep(mean_x, p), sigma)
-  print(x_all)
   
   data <- as.data.frame(cbind(x_all, rep(random_beta, each = n/j)))
   colnames(data) <- colnames_df
-  print(data)
   
   # error term 
   epsilon <- rnorm(n)
-  print("epsilon")
-  print(epsilon)
   
   # now, relaxing the assumption of how strong our measures are. per Luke's suggestion,
   # add the noise into the covariates so that we preserve the structure from earlier.
@@ -220,12 +214,7 @@ generate_data <- function(j, n = 100,
   ## TODO: somehow need to incorporate the \mu_j into the \mu_{ij} (per Luke's suggestion)
   
   measurement_noise <- rmvnorm(n = n, mean = rep(0, p), diag(sigma_noise^2, p, p))
-  print("measurement noise:")
-  print(measurement_noise)
-  
   measured_x <- x_all + measurement_noise
-  print("measured x:")
-  print(measured_x)
   
   data$Y <- rowSums(sweep(measured_x, 2, fixed_beta, "*")) + random_beta + epsilon
   data$j <- as.factor(rep(1:j, each=n/j))

@@ -169,6 +169,12 @@ generate_beta <- function(type, p, s, default = 1) {
 }
 ```
 
+```{r rmse}
+rmse <- function(predicted, true, n) {
+  return(sqrt(sum((predicted - true)^2) / n))
+}
+```
+
 ```{r generate_data, warnings=FALSE}
 
 ## DESCRIPTION OF INPUTS
@@ -265,16 +271,33 @@ analyze <- function(data, p, fixed_beta) {
   colnames(coefficients) <- c("fixed", "mixed")
   coefs_df <- as.data.frame(coefficients[2:nrow(coefficients), ])
   
-  # "the two models agreed on ___ percent of the covariates 
+  # "the two models agreed on ___ percent of the covariates" -- agreement defined as they both 
+  # deemed a beta as non-zero or both deemed a beta as zero
   
-  agreement <- sum(coefs_df$fixed !=0 & coefs_df$mixed !=0) / nrow(coefs_df)
+  agreement <- (sum((coefs_df$fixed != 0 & coefs_df$mixed != 0)) + 
+                  sum((coefs_df$fixed == 0 & coefs_df$mixed == 0))) / nrow(coefs_df)
   
-  # also want to measure the accuracy of both
+  # also want to measure the accuracy of both -- root mean squared error of 
+  # beta hat and beta_true
   
-  fixed_accuracy <- sqrt(sum((coefs_df$fixed - fixed_beta)^2) / nrow(coefs_df))
-  mixed_accuracy <- sqrt(sum((coefs_df$mixed - fixed_beta)^2) / nrow(coefs_df))
+  fixed_beta_rmse <- rmse(coefs_df$fixed, fixed_beta, nrow(coefs_df))
+  mixed_beta_rmse <- rmse(coefs_df$mixed, fixed_beta, nrow(coefs_df))
   
-  return(c(agreement, fixed_accuracy, mixed_accuracy))
+  # measure whether the two reported non-zero coefficients when they were supposed to
+  # percentage of total non-zero betas that were correctly deemed as significant
+  
+  fixed_accuracy <- sum(coefs_df$fixed != 0 & fixed_beta != 0) / sum(fixed_beta != 0)
+  mixed_accuracy <- sum(coefs_df$mixed != 0 & fixed_beta != 0) / sum(fixed_beta != 0)
+  
+  # mean squared error of both models
+  y_hat_fixed <- predict(model_lasso_fixed, X_fixed)
+  y_hat_mixed <- predict(model_lasso_mixed, X_fixed)
+  
+  fixed_rmse <- rmse(y_hat_fixed, data$Y, nrow(data))
+  mixed_rmse <- rmse(y_hat_mixed, data$Y, nrow(data))
+  
+  return(c(agreement, fixed_bet_rmse, mixed_beta_rmse, fixed_accuracy, mixed_accuracy,
+           fixed_rmse, mixed_rmse))
 }
 
 ```
@@ -282,11 +305,26 @@ analyze <- function(data, p, fixed_beta) {
 
 ```{r}
 # Repeat
-one_run <- function(p, j, beta_strength, min_beta, sigma_r, n=100) {
-  dat <- generate_data(p, j, beta_strength, min_beta, sigma_r, n)
-  fixed_beta <- c(rep(min_beta, beta_strength*p), rep(1, (1 - beta_strength) * p))
+
+
+one_run <- function(j, n = 100, 
+                    type, p, s, default,
+                    cov_x, mean_x = 0, sigma_x = 1,
+                    cov_rand_fixed,
+                    mean_r = 0, sigma_r,
+                    mean_noise = 0, sigma_noise = 1) {
+  
+  dat <- generate_data(j, n, type, p, s, default,cov_x, mean_x, sigma_x,
+                       cov_rand_fixed, mean_r, sigma_r, mean_noise, sigma_noise)
+  fixed_beta <- generate_beta(type, p, s, default)
+  # may need to fix this
   result <- analyze(dat, p, fixed_beta)
-  return(c(p, j, beta_strength, min_beta, sigma_r, n, result))
+  # feed back number of predictors, number of clusters, type of fixed beta coefficients (from paper)
+  # the default value of beta, sigma of the random intercepts, number of 
+  return(c(type, p, s, default, cov_x, mean_x, sigma_x,
+                    cov_rand_fixed,
+                    mean_r, sigma_r,
+                    mean_noise, sigma_noise, result))
 }
 
 # sigma_r -- clusters are further and further apart

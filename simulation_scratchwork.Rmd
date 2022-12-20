@@ -271,11 +271,13 @@ analyze <- function(data, p, fixed_beta) {
   colnames(coefficients) <- c("fixed", "mixed")
   coefs_df <- as.data.frame(coefficients[2:nrow(coefficients), ])
   
+  # report R^2 as a measure of signal to noise ratio
+  
+  basic_linear <- lm(as.formula(paste("Y ~", covariates)), data = data)
+  
   # "the two models agreed on ___ percent of the covariates" -- agreement defined as they both 
   # deemed a beta as non-zero out of the total significant betas. not really sure if this
   # is legitimate though
-  
-  ## not really sure
   
   agreement <- sum((coefs_df$fixed != 0 & coefs_df$mixed != 0)) / sum(fixed_beta != 0)
   
@@ -298,7 +300,9 @@ analyze <- function(data, p, fixed_beta) {
   fixed_rmse <- rmse(y_hat_fixed, data$Y, nrow(data))
   mixed_rmse <- rmse(y_hat_mixed, data$Y, nrow(data))
   
-  return(c(agreement, fixed_beta_rmse, mixed_beta_rmse, fixed_accuracy, mixed_accuracy,
+  
+  return(c(summary(basic_linear)$adj.R.squared, 
+           agreement, fixed_beta_rmse, mixed_beta_rmse, fixed_accuracy, mixed_accuracy,
            fixed_rmse, mixed_rmse))
 }
 
@@ -322,7 +326,7 @@ one_run <- function(j, n = 100,
   result <- analyze(dat, p, fixed_beta)
   # feed back number of predictors, number of clusters, type of fixed beta coefficients (from paper)
   # the default value of beta, sigma of the random intercepts, number of 
-  return(c(j, n, type, p, s, default,cov_x, mean_x, sigma_x,
+  return(c(j, n, type, p, s, default, cov_x, mean_x, sigma_x,
            cov_rand_fixed, mean_r, sigma_r, mean_noise, 
            sigma_noise, result))
 }
@@ -357,27 +361,30 @@ rerun_single_params <- function(df) {
   # these are subject to change, but just so we're not hard coding anything for now?
   num_metrics <- 7
   num_inputs <- 14
+  
+  mean_adj_r_squared <- mean(unlist(lapply(results, function (x) x[num_inputs + 1])))
+  sd_adj_r_squared <- sd(unlist(lapply(results, function (x) x[num_inputs + 1])))
     
-  mean_agreement <- mean(unlist(lapply(results, function (x) x[num_inputs + 1])))
-  sd_agreement <- sd(unlist(lapply(results, function (x) x[num_inputs + 1])))
+  mean_agreement <- mean(unlist(lapply(results, function (x) x[num_inputs + 2])))
+  sd_agreement <- sd(unlist(lapply(results, function (x) x[num_inputs + 2])))
   
-  mean_beta_rmse_fixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 2])))
-  sd_beta_rmse_fixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 2])))
+  mean_beta_rmse_fixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 3])))
+  sd_beta_rmse_fixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 3])))
   
-  mean_beta_rmse_mixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 3])))
-  sd_beta_rmse_mixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 3])))
+  mean_beta_rmse_mixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 4])))
+  sd_beta_rmse_mixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 4])))
   
-  mean_accuracy_fixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 4])))
-  sd_accuracy_fixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 4])))
+  mean_accuracy_fixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 5])))
+  sd_accuracy_fixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 5])))
   
-  mean_accuracy_mixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 5])))
-  sd_accuracy_mixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 5])))
+  mean_accuracy_mixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 6])))
+  sd_accuracy_mixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 6])))
   
-  mean_rmse_fixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 6])))
-  sd_rmse_fixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 6])))
+  mean_rmse_fixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 7])))
+  sd_rmse_fixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 7])))
   
-  mean_rmse_mixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 7])))
-  sd_rmse_mixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 7])))
+  mean_rmse_mixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 8])))
+  sd_rmse_mixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 8])))
   
   row <- c(unname(df[1]), unname(df[2]), unname(df[3]), 
           unname(df[4]), unname(df[5]), 
@@ -386,6 +393,7 @@ rerun_single_params <- function(df) {
           unname(df[10]), unname(df[11]),
           unname(df[12]), unname(df[13]),
           unname(df[14]), unname(df[15]), 
+          mean_adj_r_squared, sd_adj_r_squared,
           mean_agreement, sd_agreement, 
           mean_beta_rmse_fixed, sd_beta_rmse_fixed,
           mean_beta_rmse_mixed, sd_beta_rmse_mixed,
@@ -396,8 +404,15 @@ rerun_single_params <- function(df) {
   
   names(row) <- c("reps", "j", "n", "type", "p", "s", "default", "cov_x", "mean_x", 
                   "sigma_x", "cov_rand_fixed", "mean_r", "sigma_r", "mean_noise", "sigma_noise",
-                  "agreement", "fixed_beta_rmse", "mixed_beta_rmse", 
-                  "fixed_accuracy", "mixed_accuracy", "fixed_rmse", "mixed_rmse")
+                  "mean_adj_r2", "sd_adj_r2",
+                  "mean_agreement", "sd_agreemeent",
+                  "fixed_beta_rmse", "mixed_beta_rmse", 
+                  "mean_beta_rmse_fixed", "sd_beta_rmse_fixed",
+                  "mean_beta_rmse_mixed", "sd_beta_rmse_mixed",
+                  "mean_accuracy_fixed", "sd_accuracy_fixed",
+                  "mean_accuracy_mixed", "sd_accuracy_mixed",
+                  "mean_rmse_fixed", "sd_rmse_fixed",
+                  "mean_rmse_mixed", "sd_rmse_mixed")
 
   return(row)
 }

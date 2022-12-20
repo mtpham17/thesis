@@ -272,10 +272,12 @@ analyze <- function(data, p, fixed_beta) {
   coefs_df <- as.data.frame(coefficients[2:nrow(coefficients), ])
   
   # "the two models agreed on ___ percent of the covariates" -- agreement defined as they both 
-  # deemed a beta as non-zero or both deemed a beta as zero
+  # deemed a beta as non-zero out of the total significant betas. not really sure if this
+  # is legitimate though
   
-  agreement <- (sum((coefs_df$fixed != 0 & coefs_df$mixed != 0)) + 
-                  sum((coefs_df$fixed == 0 & coefs_df$mixed == 0))) / nrow(coefs_df)
+  ## not really sure
+  
+  agreement <- sum((coefs_df$fixed != 0 & coefs_df$mixed != 0)) / sum(fixed_beta != 0)
   
   # also want to measure the accuracy of both -- root mean squared error of 
   # beta hat and beta_true
@@ -296,7 +298,7 @@ analyze <- function(data, p, fixed_beta) {
   fixed_rmse <- rmse(y_hat_fixed, data$Y, nrow(data))
   mixed_rmse <- rmse(y_hat_mixed, data$Y, nrow(data))
   
-  return(c(agreement, fixed_bet_rmse, mixed_beta_rmse, fixed_accuracy, mixed_accuracy,
+  return(c(agreement, fixed_beta_rmse, mixed_beta_rmse, fixed_accuracy, mixed_accuracy,
            fixed_rmse, mixed_rmse))
 }
 
@@ -305,7 +307,6 @@ analyze <- function(data, p, fixed_beta) {
 
 ```{r}
 # Repeat
-
 
 one_run <- function(j, n = 100, 
                     type, p, s, default,
@@ -321,10 +322,9 @@ one_run <- function(j, n = 100,
   result <- analyze(dat, p, fixed_beta)
   # feed back number of predictors, number of clusters, type of fixed beta coefficients (from paper)
   # the default value of beta, sigma of the random intercepts, number of 
-  return(c(type, p, s, default, cov_x, mean_x, sigma_x,
-                    cov_rand_fixed,
-                    mean_r, sigma_r,
-                    mean_noise, sigma_noise, result))
+  return(c(j, n, type, p, s, default,cov_x, mean_x, sigma_x,
+           cov_rand_fixed, mean_r, sigma_r, mean_noise, 
+           sigma_noise, result))
 }
 
 # sigma_r -- clusters are further and further apart
@@ -337,39 +337,84 @@ one_run <- function(j, n = 100,
 rerun_single_params <- function(df) {
   # print("starting an iteration")
   # print(df[7])
-  results <- rerun(unname(df[1]), one_run(p = unname(df[2]), 
-                                          j = unname(df[3]), 
-                                          beta_strength = unname(df[4]),
-                                          min_beta = unname(df[5]), 
-                                          sigma_r = unname(df[6]),
-                                          n = unname(df[7])))
-  mean_agreement <- mean(unlist(lapply(results, function (x) x[7])))
-  sd_agreement <- sd(unlist(lapply(results, function (x) x[7])))
   
-  mean_accuracy_fixed <- mean(unlist(lapply(results, function (x) x[8])))
-  sd_accuracy_fixed <- sd(unlist(lapply(results, function (x) x[8])))
+  results <- rerun(unname(df[1]), one_run(j = unname(df[2]), n = unname(df[3]), 
+                                        type = unname(df[4]), p = unname(df[5]), 
+                                        s = unname(df[6]), default = unname(df[7]),
+                                        cov_x = unname(df[8]), mean_x = unname(df[9]), 
+                                        sigma_x = unname(df[10]), cov_rand_fixed = unname(df[11]),
+                                        mean_r = unname(df[12]), sigma_r = unname(df[13]),
+                                        mean_noise = unname(df[14]), sigma_noise = unname(df[15])))
   
-  mean_accuracy_mixed <- mean(unlist(lapply(results, function (x) x[9])))
-  sd_accuracy_mixed <- sd(unlist(lapply(results, function (x) x[9])))
+  # return statement of one_run: return(c(j, n, type, p, s, default, cov_x, mean_x, sigma_x,
+  #          cov_rand_fixed, mean_r, sigma_r, mean_noise, 
+  #          sigma_noise, result))
   
-  row <- c(unname(df[2]), unname(df[3]), unname(df[4]), unname(df[5]), 
-           unname(df[6]), unname(df[7]), unname(df[1]), 
-           mean_agreement, sd_agreement, mean_accuracy_fixed, sd_accuracy_fixed,
-           mean_accuracy_mixed, sd_accuracy_mixed)
-  names(row) <- c("p", "j", "beta_strength", "min_beta", "sigma_r", "n", "reps",
-                  "mean_agreement", "sd_agreement", 
-                  "mean_error_fixed", "sd_error_fixed",
-                  "mean_error_mixed", "sd_error_mixed")
+  # return statement of analyze: return(c(agreement, fixed_beta_rmse, mixed_beta_rmse, 
+  # fixed_accuracy, mixed_accuracy,
+  #        fixed_rmse, mixed_rmse))
   
+  # these are subject to change, but just so we're not hard coding anything for now?
+  num_metrics <- 7
+  num_inputs <- 14
+    
+  mean_agreement <- mean(unlist(lapply(results, function (x) x[num_inputs + 1])))
+  sd_agreement <- sd(unlist(lapply(results, function (x) x[num_inputs + 1])))
+  
+  mean_beta_rmse_fixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 2])))
+  sd_beta_rmse_fixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 2])))
+  
+  mean_beta_rmse_mixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 3])))
+  sd_beta_rmse_mixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 3])))
+  
+  mean_accuracy_fixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 4])))
+  sd_accuracy_fixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 4])))
+  
+  mean_accuracy_mixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 5])))
+  sd_accuracy_mixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 5])))
+  
+  mean_rmse_fixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 6])))
+  sd_rmse_fixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 6])))
+  
+  mean_rmse_mixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 7])))
+  sd_rmse_mixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 7])))
+  
+  row <- c(unname(df[1]), unname(df[2]), unname(df[3]), 
+          unname(df[4]), unname(df[5]), 
+          unname(df[6]), unname(df[7]),
+          unname(df[8]), unname(df[9]), 
+          unname(df[10]), unname(df[11]),
+          unname(df[12]), unname(df[13]),
+          unname(df[14]), unname(df[15]), 
+          mean_agreement, sd_agreement, 
+          mean_beta_rmse_fixed, sd_beta_rmse_fixed,
+          mean_beta_rmse_mixed, sd_beta_rmse_mixed,
+          mean_accuracy_fixed, sd_accuracy_fixed,
+          mean_accuracy_mixed, sd_accuracy_mixed,
+          mean_rmse_fixed, sd_rmse_fixed,
+          mean_rmse_mixed, sd_rmse_mixed)
+  
+  names(row) <- c("reps", "j", "n", "type", "p", "s", "default", "cov_x", "mean_x", 
+                  "sigma_x", "cov_rand_fixed", "mean_r", "sigma_r", "mean_noise", "sigma_noise",
+                  "agreement", "fixed_beta_rmse", "mixed_beta_rmse", 
+                  "fixed_accuracy", "mixed_accuracy", "fixed_rmse", "mixed_rmse")
+
   return(row)
 }
 
-
-rerun_mult_parameters <- function(runs_vec, p_vec, j_vec, beta_strength_vec, 
-                                  min_beta_vec, sigma_r_vec, n_vec) {
-  combos <- expand.grid(runs = runs_vec, p = p_vec, j = j_vec, 
-                        beta_strength = beta_strength_vec, 
-                        min_beta = min_beta_vec, sigma_r = sigma_r_vec, n = n_vec)
+rerun_mult_parameters <- function(runs_vec, j_vec, n_vec, type_vec, p_vec,
+                                  s_vec, default_vec, cov_x, mean_x_vec, sigma_x_vec,
+                                  cov_rand_fixed_vec,
+                                  mean_r_vec, sigma_r_vec,
+                                  mean_noise_vec, sigma_noise_vec) {
+  
+  combos <- expand.grid(runs = runs_vec, j = j_vec, n = n_vec, type = type_vec, p = p_vec,
+                        s = s_vec, default_beta = default_vec, cov_x = cov_x, 
+                        mean_x = mean_x_vec, sigma_x = sigma_x_vec,
+                        cov_rand_fixed = cov_rand_fixed_vec,
+                        mean_r = mean_r_vec, sigma_r = sigma_r_vec,
+                        mean_noise = mean_noise_vec, sigma_noise = sigma_noise_vec)
+  
   results <- apply(combos, 1, rerun_single_params)
   print("finished one set of parameters")
   
@@ -412,15 +457,15 @@ set.seed(17)
 #                                         sigma_r_vec = seq(from = 1, to = 5, by = 2),
 #                                         n_vec = 100)
 
-prelim_results <- rerun_mult_parameters(runs_vec = 5,
-                                        p_vec = c(4, 8),
-                                        j_vec = c(2, 10, 20),
-                                        beta_strength_vec = c(0.25, 0.5),
-                                        min_beta_vec = c(0.1, 0.7),
-                                        sigma_r_vec = c(1, 10),
-                                        n_vec = 100)
+# prelim_results <- rerun_mult_parameters(runs_vec = 5,
+#                                         p_vec = c(4, 8),
+#                                         j_vec = c(2, 10, 20),
+#                                         beta_strength_vec = c(0.25, 0.5),
+#                                         min_beta_vec = c(0.1, 0.7),
+#                                         sigma_r_vec = c(1, 10),
+#                                         n_vec = 100)
 
-assess_performance(prelim_results)
+# assess_performance(prelim_results)
 ```
 ```{r}
 df_results <- assess_performance(prelim_results)

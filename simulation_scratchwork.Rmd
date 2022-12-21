@@ -228,13 +228,18 @@ generate_data <- function(j, n = 100,
   return(data)
 }
 
-generate_data(j = 2, n = 10, 
+test_df <- generate_data(j = 2, n = 10, 
               type = 1, p = 5, s = 3, default = 1, 
               cov_x = 0.5, mean_x = 0, sigma_x = 1, 
               cov_rand_fixed = 0, mean_r = 0, sigma_r = 2)
 
 ```
 
+```{r}
+library(regclass)
+model <- lm(Y ~ X1 + X2 + X3 + X4 + X5, data = test_df)
+VIF(model)
+```
 
 
 ```{r}

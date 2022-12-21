@@ -67,8 +67,9 @@ y1_child_obs <- y1_child_obs_raw %>%
   mutate_at(vars(o_c_verbal:o_c_focus), as.character) %>% 
   dplyr::select(c(classid, nsweeps, o_c_verbal:o_c_focus, 
                   starts_with("c_m8"), provid)) %>%
+  # temporarily comment out this dummy generation so that we can test the VIF
   dummy_cols(select_columns = c("o_c_verbal", "o_c_towhom", "o_c_schedule", "o_c_interaction", "o_c_typetask", "o_c_involvement", "o_c_focus"),
-             remove_selected_columns = TRUE) %>% 
+             remove_selected_columns = TRUE) %>%
   group_by(classid, cid) %>%
   # replaced everything() with nsweeps:last_col()
   summarize(across(nsweeps:last_col(), ~ mean(.x, na.rm = TRUE))) %>%
@@ -91,10 +92,10 @@ y1_child_obs <- y1_child_obs_raw %>%
 
 #Re-format the teacher data so that it is one row per class
 y1_teacher_obs <- y1_teacher_obs_raw %>% 
-  dummy_cols(select_columns = c("o_t_verbal_o", "o_t_whom_o", "o_t_schedule_o", 
-                                "o_t_task_o", "o_t_instruct", "o_t_focus_o", 
+  dummy_cols(select_columns = c("o_t_verbal_o", "o_t_whom_o", "o_t_schedule_o",
+                                "o_t_task_o", "o_t_instruct", "o_t_focus_o",
                                 "o_t_tone_o", "o_t_attention_o", "o_t_es_o"),
-             remove_selected_columns = TRUE) %>% 
+             remove_selected_columns = TRUE) %>%
     group_by(classid) %>%
   summarize(
     nsweeps = n(),
@@ -291,6 +292,7 @@ outcomes_use_y1 <- colnames(outcomes_and_obs_full_y1)[gain_ind][order(diag(inv))
 ```
 
 
+
 ```{r}
 
 # now that we have the three outcomes we want to work with, quickly run linear regression and observe R^2 value
@@ -300,8 +302,9 @@ outcomes <- colnames(outcomes_and_obs_full_y1[, gain_ind])
 for (outcome in outcomes_use_y1) {
   other_outcomes <- outcomes[outcomes != outcome]
   df_lreg <- outcomes_and_obs_full_y1 %>% select(-c(other_outcomes))
-  lreg <- lm(as.formula(paste(outcome, "~ . - cid")), data = df_lreg)
+  lreg <- lm(as.formula(paste(outcome, "~ . - cid")), data = df_lreg, na.action = na.exclude)
   print(summary(lreg)$adj.r.squared)
+  print(VIF(lreg))
 }
 
 # these are super low...

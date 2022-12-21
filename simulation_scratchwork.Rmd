@@ -116,8 +116,6 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
   # print(paste("min lambda:", lambdas[which.min(pred_error_vec)]))
   return(lambdas[which.min(pred_error_vec)])  
 }
-
-cv_glmmLasso(data, Y ~ X1 + X2 + X3 + X4 + X5)
 ```
 
 
@@ -228,17 +226,11 @@ generate_data <- function(j, n = 100,
   return(data)
 }
 
-test_df <- generate_data(j = 2, n = 10, 
+test_df <- generate_data(j = 2, n = 100, 
               type = 1, p = 5, s = 3, default = 1, 
               cov_x = 0.5, mean_x = 0, sigma_x = 1, 
               cov_rand_fixed = 0, mean_r = 0, sigma_r = 2)
 
-```
-
-```{r}
-library(regclass)
-model <- lm(Y ~ X1 + X2 + X3 + X4 + X5, data = test_df)
-VIF(model)
 ```
 
 
@@ -260,7 +252,6 @@ analyze <- function(data, p, fixed_beta) {
   cc <- coef(model_lasso_fixed, s = model_lasso_fixed$lambda.min)
   #placeholder lambda value
   coefficients_fixed <- coef(model_lasso_fixed)
-  # print(paste("fixed coefficients:", coefficients_fixed))
   
   
   lambda_min <- cv_glmmLasso(data = data,
@@ -271,7 +262,6 @@ analyze <- function(data, p, fixed_beta) {
                                                      lambda=lambda_min)
 
   coefficients_mixed <- model_lasso_mixed$coefficients
-  # print("generated coefficients")
   coefficients <- cbind(as.matrix(coefficients_fixed), as.matrix(coefficients_mixed))
   colnames(coefficients) <- c("fixed", "mixed")
   coefs_df <- as.data.frame(coefficients[2:nrow(coefficients), ])
@@ -284,7 +274,8 @@ analyze <- function(data, p, fixed_beta) {
   # deemed a beta as non-zero out of the total significant betas. not really sure if this
   # is legitimate though
   
-  agreement <- sum((coefs_df$fixed != 0 & coefs_df$mixed != 0)) / sum(fixed_beta != 0)
+  agreement <- sum((coefs_df$fixed != 0 & coefs_df$mixed != 0) |
+                  (coefs_df$fixed == 0 & coefs_df$mixed == 0)) / p
   
   # also want to measure the accuracy of both -- root mean squared error of 
   # beta hat and beta_true
@@ -299,17 +290,20 @@ analyze <- function(data, p, fixed_beta) {
   mixed_accuracy <- sum(coefs_df$mixed != 0 & fixed_beta != 0) / sum(fixed_beta != 0)
   
   # mean squared error of both models
-  y_hat_fixed <- predict(model_lasso_fixed, X_fixed)
-  y_hat_mixed <- predict(model_lasso_mixed, X_fixed)
+  y_hat_fixed <- predict(model_lasso_fixed, newx = X_fixed, s = model_lasso_fixed$lambda.min)
+  y_hat_mixed <- predict(model_lasso_mixed, newx = X_fixed, s = lambda_min)
   
   fixed_rmse <- rmse(y_hat_fixed, data$Y, nrow(data))
   mixed_rmse <- rmse(y_hat_mixed, data$Y, nrow(data))
   
   
-  return(c(summary(basic_linear)$adj.R.squared, 
+  return(c(summary(basic_linear)$adj.r.squared, 
            agreement, fixed_beta_rmse, mixed_beta_rmse, fixed_accuracy, mixed_accuracy,
            fixed_rmse, mixed_rmse))
 }
+
+test_beta <- generate_beta(1, 5, 3)
+analyze(test_df, 5, test_beta)
 
 ```
 
@@ -320,7 +314,7 @@ analyze <- function(data, p, fixed_beta) {
 one_run <- function(j, n = 100, 
                     type, p, s, default,
                     cov_x, mean_x = 0, sigma_x = 1,
-                    cov_rand_fixed,
+                    cov_rand_fixed = 0,
                     mean_r = 0, sigma_r,
                     mean_noise = 0, sigma_noise = 1) {
   
@@ -411,7 +405,6 @@ rerun_single_params <- function(df) {
                   "sigma_x", "cov_rand_fixed", "mean_r", "sigma_r", "mean_noise", "sigma_noise",
                   "mean_adj_r2", "sd_adj_r2",
                   "mean_agreement", "sd_agreemeent",
-                  "fixed_beta_rmse", "mixed_beta_rmse", 
                   "mean_beta_rmse_fixed", "sd_beta_rmse_fixed",
                   "mean_beta_rmse_mixed", "sd_beta_rmse_mixed",
                   "mean_accuracy_fixed", "sd_accuracy_fixed",
@@ -456,36 +449,31 @@ assess_performance <- function(results) {
 ```
 
 ```{r}
-
-# this took a really long time to run, so maybe wait for a bit
-# prelim_results <- rerun_mult_parameters(runs_vec = 100, 
-#                                         m_vec = seq(from=4, to=40, by=4),
-#                                         j_vec = c(2, 4, 5, 10, 25, 50),
-#                                         beta_strength_vec = c(0.25, 0.50, 0.75),
-#                                         min_beta_vec = seq(from=0.1, to=0.8, by=0.1),
-#                                         sigma_r_vec = seq(from=0.1, to=6, by=0.5),
-#                                         n_vec = c(50, 100, 200))
-
+options(warn=-1)
 set.seed(17)
 
-# prelim_results <- rerun_mult_parameters(runs_vec = 5, 
-#                                         m_vec = seq(from=4, to=20, by=8),
-#                                         j_vec = c(2, 10),
-#                                         beta_strength_vec = c(0.25, 0.50),
-#                                         min_beta_vec = seq(from = 0.1, to = 0.9, 
-#                                                            by = 0.4),
-#                                         sigma_r_vec = seq(from = 1, to = 5, by = 2),
-#                                         n_vec = 100)
+prelim_results <- rerun_mult_parameters(runs_vec = 5,
+                                        j_vec = 2, n_vec = 100,
+                                        type_vec = 2,
+                                        p_vec = 4, s_vec = 2, default_vec = 1,
+                                        cov_x = 0.5, mean_x_vec = 0, sigma_x_vec = 1,
+                                        cov_rand_fixed_vec = 0,
+                                        mean_r_vec = 0, sigma_r_vec = 1,
+                                        mean_noise_vec = 0, sigma_noise_vec = 1)
+```
 
-# prelim_results <- rerun_mult_parameters(runs_vec = 5,
-#                                         p_vec = c(4, 8),
-#                                         j_vec = c(2, 10, 20),
-#                                         beta_strength_vec = c(0.25, 0.5),
-#                                         min_beta_vec = c(0.1, 0.7),
-#                                         sigma_r_vec = c(1, 10),
-#                                         n_vec = 100)
 
+```{r}
 # assess_performance(prelim_results)
+
+# prelim_results <- rerun_mult_parameters(runs_vec = 5, 
+#                                         j_vec = c(2, 5), n_vec = 100, 
+#                                         type_vec = c(1, 2, 3, 4, 5),
+#                                         p_vec = c(4, 8), s_vec = 2, default_vec = 1, 
+#                                         cov_x = c(0, 0.5), mean_x_vec = 0, sigma_x_vec = 1,
+#                                         cov_rand_fixed_vec = 0,
+#                                         mean_r_vec = 0, sigma_r_vec = 1,
+#                                         mean_noise_vec = 0, sigma_noise_vec = 1)
 ```
 ```{r}
 df_results <- assess_performance(prelim_results)

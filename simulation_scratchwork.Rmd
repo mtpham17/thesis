@@ -188,8 +188,6 @@ rmse <- function(predicted, true, n) {
 
 ## TODO: NEED TO FIND SOME WAY TO MAKE UNEVENLY SIZED CLUSTERS
 
-# should the noise due to measurement have correlations between them? probably not right?
-
 generate_data <- function(j, n = 100, 
                           type, p, s, default,
                           cov_x, mean_x = 0, sigma_x = 1, 
@@ -202,11 +200,17 @@ generate_data <- function(j, n = 100,
   # make some of these zero
   fixed_beta <- generate_beta(type, p, s, default)
   
+  # TODO: add some scaling in of the cluster intercept into the mean_x (those with higher
+  # intercept values also have higher x values)
+  
   sigma <- diag(sigma_x^2, p, p)
   sigma[outer(1:p, 1:p, function(i,j) i!=j)] <- cov_x
   x_all <- rmvnorm(n = n, mean = rep(mean_x, p), sigma)
   
-  data <- as.data.frame(cbind(x_all, rep(random_beta, each = n/j)))
+  measurement_noise <- rmvnorm(n = n, mean = rep(0, p), diag(sigma_noise^2, p, p))
+  noisy_x <- x_all + measurement_noise
+  
+  data <- as.data.frame(cbind(noisy_x, rep(random_beta, each = n/j)))
   colnames(data) <- colnames_df
   
   # error term 
@@ -215,14 +219,12 @@ generate_data <- function(j, n = 100,
   # now, relaxing the assumption of how strong our measures are. per Luke's suggestion,
   # add the noise into the covariates so that we preserve the structure from earlier.
   
-  ## TODO: somehow need to incorporate the \mu_j into the \mu_{ij} (per Luke's suggestion)
+  data$Y <- rowSums(sweep(x_all, 2, fixed_beta, "*")) + random_beta + epsilon
   
-  measurement_noise <- rmvnorm(n = n, mean = rep(0, p), diag(sigma_noise^2, p, p))
-  measured_x <- x_all + measurement_noise
-  
-  data$Y <- rowSums(sweep(measured_x, 2, fixed_beta, "*")) + random_beta + epsilon
+  ## look at handbook for unevenly sized cluster
   data$j <- as.factor(rep(1:j, each=n/j))
   # print("generated data")
+  
   return(data)
 }
 
@@ -274,6 +276,10 @@ analyze <- function(data, p, fixed_beta) {
   # deemed a beta as non-zero out of the total significant betas. not really sure if this
   # is legitimate though
   
+  # be cautious of this one (think of edge cases)
+  # TODO: think about calculating precision, recall, F1 score -- use false positive, false
+  # negative language
+  
   agreement <- sum((coefs_df$fixed != 0 & coefs_df$mixed != 0) |
                   (coefs_df$fixed == 0 & coefs_df$mixed == 0)) / p
   
@@ -295,7 +301,6 @@ analyze <- function(data, p, fixed_beta) {
   
   fixed_rmse <- rmse(y_hat_fixed, data$Y, nrow(data))
   mixed_rmse <- rmse(y_hat_mixed, data$Y, nrow(data))
-  
   
   return(c(summary(basic_linear)$adj.r.squared, 
            agreement, fixed_beta_rmse, mixed_beta_rmse, fixed_accuracy, mixed_accuracy,
@@ -453,37 +458,27 @@ options(warn=-1)
 set.seed(17)
 
 prelim_results <- rerun_mult_parameters(runs_vec = 5,
-                                        j_vec = 2, n_vec = 100,
-                                        type_vec = 2,
-                                        p_vec = 4, s_vec = 2, default_vec = 1,
-                                        cov_x = 0.5, mean_x_vec = 0, sigma_x_vec = 1,
+                                        j_vec = c(2, 5), n_vec = 100,
+                                        type_vec = c(1, 2, 3, 4, 5),
+                                        p_vec = c(4, 8), s_vec = 2, default_vec = 1,
+                                        cov_x = c(0, 0.5), mean_x_vec = 0, sigma_x_vec = 1,
                                         cov_rand_fixed_vec = 0,
                                         mean_r_vec = 0, sigma_r_vec = 1,
                                         mean_noise_vec = 0, sigma_noise_vec = 1)
 ```
 
+```{r}
+results_df <- assess_performance(prelim_results)
+```
 
 ```{r}
 # assess_performance(prelim_results)
 
-# prelim_results <- rerun_mult_parameters(runs_vec = 5, 
-#                                         j_vec = c(2, 5), n_vec = 100, 
-#                                         type_vec = c(1, 2, 3, 4, 5),
-#                                         p_vec = c(4, 8), s_vec = 2, default_vec = 1, 
-#                                         cov_x = c(0, 0.5), mean_x_vec = 0, sigma_x_vec = 1,
-#                                         cov_rand_fixed_vec = 0,
-#                                         mean_r_vec = 0, sigma_r_vec = 1,
-#                                         mean_noise_vec = 0, sigma_noise_vec = 1)
+
 ```
 ```{r}
 df_results <- assess_performance(prelim_results)
-df_results$mixed_better <- df_results$mean_acc_fixed > df_results$mean_acc_mixed
-df_results[df_results$mean_agreement == min(df_results$mean_agreement), ]
-# looking at minimum agreement: larger amounts of clusters, max sigma_r values
-# but the mixed model isn't necessarily more accurate, mostly pretty weak coefficients of fixed effects (also makes sense!)
-df_results[df_results$mean_agreement == max(df_results$mean_agreement), ]
-# description of max
-# mix of small and large clusters (mix of different j values), lowest sigma_r values (makes sense!)
-# when the two agree the most (100%) agreement, the mixed model is more accurate (lower error) in all cases
+df_results$mixed_better_beta_rmse <- df_results$mean_beta_rmse_fixed > df_results$mean_beta_rmse_mixed
+df_results$mixed_better_rmse <- df_results$mean_rmse_fixed > df_results$mean_rmse_mixed
 ```
 

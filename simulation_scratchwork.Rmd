@@ -253,23 +253,29 @@ analyze <- function(data, p, fixed_beta) {
   com.names <- lapply(seq_along(var.names),
                     function(i) combn(var.names, i, FUN = paste, collapse = " + "))
   covariates <- com.names[[p]]
+  
+  # indi <- sample(0.80 * nrow(data), 1:nrow(data), replace = FALSE)
+  # 
+  # data_train <- data[-indi,]
+  # data_test <-data[indi,]
+  
   X_fixed <- model.matrix(as.formula(paste("Y ~", covariates)),
                           data = data)
   X_fixed <- X_fixed[, -1]
   Y <- data$Y
 
   # call cv.glmnet()
-  model_lasso_fixed <- cv.glmnet(x = X_fixed, y = Y, nfolds = 5, alpha = 1)
+  model_lasso_fixed <- cv.glmnet(x = X_fixed_train, y = Y_train, nfolds = 5, alpha = 1)
   cc <- coef(model_lasso_fixed, s = model_lasso_fixed$lambda.min)
   #placeholder lambda value
   coefficients_fixed <- coef(model_lasso_fixed)
   
   
-  lambda_min <- cv_glmmLasso(data = data,
+  lambda_min <- cv_glmmLasso(data = data_train,
                              formula = as.formula(paste("Y ~", covariates)))
   model_lasso_mixed <- glmmLasso(fix = as.formula(paste("Y ~", covariates)),
                                                      rnd=list(j=~1),
-                                                    data = data,
+                                                    data = data_train,
                                                      lambda=lambda_min)
 
   coefficients_mixed <- model_lasso_mixed$coefficients
@@ -289,6 +295,9 @@ analyze <- function(data, p, fixed_beta) {
   # TODO: think about calculating precision, recall, F1 score -- use false positive, false
   # negative language
   
+  # do I need to use train and test for the agreement? no, right? (because I'm only fitting one
+  # model)?
+  
   agreement <- sum((coefs_df$fixed != 0 & coefs_df$mixed != 0) |
                   (coefs_df$fixed == 0 & coefs_df$mixed == 0)) / p
   
@@ -305,11 +314,12 @@ analyze <- function(data, p, fixed_beta) {
   mixed_accuracy <- sum(coefs_df$mixed != 0 & fixed_beta != 0) / sum(fixed_beta != 0)
   
   # mean squared error of both models
+  
   y_hat_fixed <- predict(model_lasso_fixed, newx = X_fixed, s = model_lasso_fixed$lambda.min)
   y_hat_mixed <- predict(model_lasso_mixed, newx = X_fixed, s = lambda_min)
   
-  fixed_rmse <- rmse(y_hat_fixed, data$Y, nrow(data))
-  mixed_rmse <- rmse(y_hat_mixed, data$Y, nrow(data))
+  fixed_rmse <- rmse(y_hat_fixed, Y, nrow(data))
+  mixed_rmse <- rmse(y_hat_mixed, Y, nrow(data))
   
   return(c(summary(basic_linear)$adj.r.squared, 
            agreement, fixed_beta_rmse, mixed_beta_rmse, fixed_accuracy, mixed_accuracy,

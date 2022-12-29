@@ -186,31 +186,39 @@ rmse <- function(predicted, true, n) {
 
 ## TODO: NEED TO INTRODUCE SOME WAY TO CORRELATE THE CLUSTERS WITH THE BETA COEFFICIENTS
 
-## TODO: NEED TO FIND SOME WAY TO MAKE UNEVENLY SIZED CLUSTERS
-
-generate_data <- function(j, n = 100, 
+generate_data <- function(sample_size, 
                           type, p, s, default,
-                          cov_x, mean_x = 0, sigma_x = 1, 
+                          cov_x, scale, base_mean_x = 0, sigma_x = 1, 
                           cov_rand_fixed,
                           mean_r = 0, sigma_r, 
                           mean_noise = 0, sigma_noise = 1) {
+  
+  n <- sum(sample_size)
+  j <- length(sample_size)
+  
   colnames_df <- c(paste("X", 1:p, sep = ""), "random_beta") 
-  random_beta <- rnorm(n=j, mean=0, sigma_r)
+  r_b <- rnorm(n=j, mean=mean_r, sigma_r)
+  random_beta <- rep(r_b, times = sample_size)
   
   # make some of these zero
   fixed_beta <- generate_beta(type, p, s, default)
   
-  # TODO: add some scaling in of the cluster intercept into the mean_x (those with higher
-  # intercept values also have higher x values)
-  
   sigma <- diag(sigma_x^2, p, p)
   sigma[outer(1:p, 1:p, function(i,j) i!=j)] <- cov_x
-  x_all <- rmvnorm(n = n, mean = rep(mean_x, p), sigma)
+  mean_x <- rep(base_mean_x, n) + scale * random_beta
+  
+  # Cholesky decomposition to generate correlated covariates
+  c <- chol(sigma)
+  x_unc <- replicate(p, rnorm(n, mean_x))
+  x_all <- x_unc %*% c
+  
+  # previous method using multivariate normal, but was difficult to use vector of means
+  # x_all <- rmvnorm(n = n, mean = rep(mean_x, p), sigma)
   
   measurement_noise <- rmvnorm(n = n, mean = rep(0, p), diag(sigma_noise^2, p, p))
   noisy_x <- x_all + measurement_noise
   
-  data <- as.data.frame(cbind(noisy_x, rep(random_beta, each = n/j)))
+  data <- as.data.frame(cbind(noisy_x, random_beta))
   colnames(data) <- colnames_df
   
   # error term 
@@ -222,16 +230,17 @@ generate_data <- function(j, n = 100,
   data$Y <- rowSums(sweep(x_all, 2, fixed_beta, "*")) + random_beta + epsilon
   
   ## look at handbook for unevenly sized cluster
-  data$j <- as.factor(rep(1:j, each=n/j))
+  data$j <- as.factor(rep(1:j, times = sample_size))
   # print("generated data")
   
   return(data)
 }
 
-test_df <- generate_data(j = 2, n = 100, 
+test_df <- generate_data(sample_size = c(3, 4, 3),
               type = 1, p = 5, s = 3, default = 1, 
-              cov_x = 0.5, mean_x = 0, sigma_x = 1, 
-              cov_rand_fixed = 0, mean_r = 0, sigma_r = 2)
+              cov_x = 0.5, scale = 0.5, base_mean_x = 0, sigma_x = 1, 
+              cov_rand_fixed = 0, mean_r = 0, sigma_r = 2,
+              mean_noise = 0, sigma_noise = 1)
 
 ```
 

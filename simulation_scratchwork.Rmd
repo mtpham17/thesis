@@ -168,8 +168,8 @@ generate_beta <- function(type, p, s, default = 1) {
 ```
 
 ```{r rmse}
-rmse <- function(predicted, true, n) {
-  return(sqrt(sum((predicted - true)^2) / n))
+rmse <- function(predicted, true) {
+  return(sqrt(sum((predicted - true)^2) / length(predicted)))
 }
 ```
 
@@ -236,7 +236,7 @@ generate_data <- function(sample_size,
   return(data)
 }
 
-test_df <- generate_data(sample_size = c(3, 4, 3),
+test_df <- generate_data(sample_size = c(30, 40, 30),
               type = 1, p = 5, s = 3, default = 1, 
               cov_x = 0.5, scale = 0.5, base_mean_x = 0, sigma_x = 1, 
               cov_rand_fixed = 0, mean_r = 0, sigma_r = 2,
@@ -244,10 +244,53 @@ test_df <- generate_data(sample_size = c(3, 4, 3),
 
 ```
 
+```{r}
+library(caret)
+# fixed boolean to indicate whether 
+perf_metrics <- function(beta_hat, beta_true, y_hat, y_true, fixed) {
+   # also want to measure the accuracy of both -- root mean squared error of 
+  # beta hat and beta_true
+  
+  y_rmse <- rmse(y_hat, y_true)
+  
+  beta_rmse <- rmse(beta_hat, beta_true)
+  
+  # rewrite beta values as 0 (equal to zero) and 1 (nonzero)
+  
+  true_beta_categorical <- factor(beta_true > 0)
+  pred_beta_categorical <- factor(beta_hat > 0)
+  print(true_beta_categorical)
+  print(pred_beta_categorical)
+  
+  cm <- confusionMatrix(pred_beta_categorical, true_beta_categorical,
+                mode = "everything",
+                positive="TRUE")
+  
+  # previously, true positive/negative
+  sensitivity <- unname(cm$byClass["Sensitivity"])
+  specificity <- unname(cm$byClass["Specificity"])
+  precision <- unname(cm$byClass["Precision"])
+  recall <- unname(cm$byClass["Recall"])
+  f <- unname(cm$byClass["F1"])
+  
+  results_list <- list(y_rmse, beta_rmse, sensitivity, specificity, precision, recall, f)
+  names <- c("y_rmse", "beta_rmse", "sensitivity", "specificity", "precision", "recall", "F1")
+  if (fixed) {
+    names(results_list) <- unlist(lapply(names, function(x) paste(x, "_fixed", sep = "")))
+  }
+  
+  else {
+    names(results_list) <- unlist(lapply(names, function(x) paste(x, "_mixed", sep = "")))
+  }
+  
+  return(results_list)
+}
+```
+
 
 ```{r}
 # Analyze
-analyze <- function(data, p, fixed_beta) {
+analyze <- function(data, p, true_beta) {
   # need to do cross validation for LASSO
   var.names <- paste("X", 1:p, sep = "")
   com.names <- lapply(seq_along(var.names),
@@ -262,26 +305,22 @@ analyze <- function(data, p, fixed_beta) {
   X_fixed <- model.matrix(as.formula(paste("Y ~", covariates)),
                           data = data)
   X_fixed <- X_fixed[, -1]
-  Y <- data$Y
 
   # call cv.glmnet()
-  model_lasso_fixed <- cv.glmnet(x = X_fixed_train, y = Y_train, nfolds = 5, alpha = 1)
-  cc <- coef(model_lasso_fixed, s = model_lasso_fixed$lambda.min)
-  #placeholder lambda value
-  coefficients_fixed <- coef(model_lasso_fixed)
+  model_lasso_fixed <- cv.glmnet(x = X_fixed, y = data$Y, nfolds = 5, alpha = 1)
+  coefficients_fixed <- coef(model_lasso_fixed, s = model_lasso_fixed$lambda.min)[2:(length(true_beta) + 1)]
   
   
-  lambda_min <- cv_glmmLasso(data = data_train,
+  lambda_min <- cv_glmmLasso(data = data,
                              formula = as.formula(paste("Y ~", covariates)))
   model_lasso_mixed <- glmmLasso(fix = as.formula(paste("Y ~", covariates)),
                                                      rnd=list(j=~1),
-                                                    data = data_train,
+                                                    data = data,
                                                      lambda=lambda_min)
-
-  coefficients_mixed <- model_lasso_mixed$coefficients
-  coefficients <- cbind(as.matrix(coefficients_fixed), as.matrix(coefficients_mixed))
-  colnames(coefficients) <- c("fixed", "mixed")
-  coefs_df <- as.data.frame(coefficients[2:nrow(coefficients), ])
+  coefficients_mixed <- model_lasso_mixed$coefficients[2:(length(true_beta) + 1)]
+  # coefficients <- cbind(as.matrix(coefficients_fixed), as.matrix(coefficients_mixed))
+  # colnames(coefficients) <- c("fixed", "mixed")
+  # coefs_df <- as.data.frame(coefficients[2:nrow(coefficients), ])
   
   # report R^2 as a measure of signal to noise ratio
   
@@ -291,39 +330,21 @@ analyze <- function(data, p, fixed_beta) {
   # deemed a beta as non-zero out of the total significant betas. not really sure if this
   # is legitimate though
   
-  # be cautious of this one (think of edge cases)
-  # TODO: think about calculating precision, recall, F1 score -- use false positive, false
-  # negative language
-  
   # do I need to use train and test for the agreement? no, right? (because I'm only fitting one
   # model)?
   
-  agreement <- sum((coefs_df$fixed != 0 & coefs_df$mixed != 0) |
-                  (coefs_df$fixed == 0 & coefs_df$mixed == 0)) / p
-  
-  # also want to measure the accuracy of both -- root mean squared error of 
-  # beta hat and beta_true
-  
-  fixed_beta_rmse <- rmse(coefs_df$fixed, fixed_beta, nrow(coefs_df))
-  mixed_beta_rmse <- rmse(coefs_df$mixed, fixed_beta, nrow(coefs_df))
-  
-  # measure whether the two reported non-zero coefficients when they were supposed to
-  # percentage of total non-zero betas that were correctly deemed as significant
-  
-  fixed_accuracy <- sum(coefs_df$fixed != 0 & fixed_beta != 0) / sum(fixed_beta != 0)
-  mixed_accuracy <- sum(coefs_df$mixed != 0 & fixed_beta != 0) / sum(fixed_beta != 0)
-  
-  # mean squared error of both models
+  agreement <- sum((coefficients_fixed != 0 & coefficients_mixed != 0) |
+                  (coefficients_fixed == 0 & coefficients_mixed == 0)) / p
   
   y_hat_fixed <- predict(model_lasso_fixed, newx = X_fixed, s = model_lasso_fixed$lambda.min)
   y_hat_mixed <- predict(model_lasso_mixed, newx = X_fixed, s = lambda_min)
   
-  fixed_rmse <- rmse(y_hat_fixed, Y, nrow(data))
-  mixed_rmse <- rmse(y_hat_mixed, Y, nrow(data))
+  fixed_results <- perf_metrics(coefficients_fixed, true_beta, y_hat_fixed, data$Y, TRUE)
+  mixed_results <- perf_metrics(coefficients_mixed, true_beta, y_hat_mixed, data$Y, FALSE)
   
-  return(c(summary(basic_linear)$adj.r.squared, 
-           agreement, fixed_beta_rmse, mixed_beta_rmse, fixed_accuracy, mixed_accuracy,
-           fixed_rmse, mixed_rmse))
+  return(c(list("adj_r_squared" = summary(basic_linear)$adj.r.squared, "agreement" = agreement), 
+           fixed_results,
+           mixed_results))
 }
 
 test_beta <- generate_beta(1, 5, 3)

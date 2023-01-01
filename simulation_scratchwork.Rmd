@@ -356,23 +356,31 @@ analyze(test_df, 5, test_beta)
 ```{r}
 # Repeat
 
-one_run <- function(j, n = 100, 
+one_run <- function(sample_size, 
                     type, p, s, default,
-                    cov_x, mean_x = 0, sigma_x = 1,
-                    cov_rand_fixed = 0,
-                    mean_r = 0, sigma_r,
+                    cov_x, scale, base_mean_x = 0, sigma_x = 1, 
+                    cov_rand_fixed,
+                    mean_r = 0, sigma_r, 
                     mean_noise = 0, sigma_noise = 1) {
   
-  dat <- generate_data(j, n, type, p, s, default,cov_x, mean_x, sigma_x,
-                       cov_rand_fixed, mean_r, sigma_r, mean_noise, sigma_noise)
+  dat <- generate_data(sample_size, 
+                    type, p, s, default,
+                    cov_x, scale, base_mean_x = 0, sigma_x = 1, 
+                    cov_rand_fixed,
+                    mean_r = 0, sigma_r, 
+                    mean_noise = 0, sigma_noise = 1)
+  
   fixed_beta <- generate_beta(type, p, s, default)
   # may need to fix this
   result <- analyze(dat, p, fixed_beta)
   # feed back number of predictors, number of clusters, type of fixed beta coefficients (from paper)
   # the default value of beta, sigma of the random intercepts, number of 
-  return(c(j, n, type, p, s, default, cov_x, mean_x, sigma_x,
-           cov_rand_fixed, mean_r, sigma_r, mean_noise, 
-           sigma_noise, result))
+  return(c(sample_size, 
+            type, p, s, default,
+            cov_x, scale, base_mean_x, sigma_x, 
+            cov_rand_fixed,
+            mean_r, sigma_r, 
+            mean_noise, sigma_noise, result))
 }
 
 # sigma_r -- clusters are further and further apart
@@ -386,14 +394,15 @@ rerun_single_params <- function(df) {
   # print("starting an iteration")
   # print(df[7])
   
-  results <- rerun(unname(df[1]), one_run(j = unname(df[2]), n = unname(df[3]), 
-                                        type = unname(df[4]), p = unname(df[5]), 
-                                        s = unname(df[6]), default = unname(df[7]),
-                                        cov_x = unname(df[8]), mean_x = unname(df[9]), 
-                                        sigma_x = unname(df[10]), cov_rand_fixed = unname(df[11]),
-                                        mean_r = unname(df[12]), sigma_r = unname(df[13]),
-                                        mean_noise = unname(df[14]), sigma_noise = unname(df[15])))
-  
+  results <- rerun(unname(df[1]), one_run(sample_size = unname(df[2]), 
+                                          type = unname(df[3]), p = unname(df[4]), 
+                                          s = unname(df[5]), default = unname(df[6]),
+                                          cov_x = unname(df[7]), scale = unname(df[8]), 
+                                          base_mean_x = unname(df[9]), sigma_x = unname(df[10]), 
+                                          cov_rand_fixed = unname(df[11]),
+                                          mean_r = unname(df[12]), sigma_r = unname(df[13]), 
+                                          mean_noise = unname(df[14]), sigma_noise = unname(df[15])))
+                                
   # return statement of one_run: return(c(j, n, type, p, s, default, cov_x, mean_x, sigma_x,
   #          cov_rand_fixed, mean_r, sigma_r, mean_noise, 
   #          sigma_noise, result))
@@ -405,6 +414,8 @@ rerun_single_params <- function(df) {
   # these are subject to change, but just so we're not hard coding anything for now?
   num_metrics <- 7
   num_inputs <- 14
+  
+  ## NEED TO FIX THIS -- ALSO MAKE IT MORE EFFICIENT
   
   mean_adj_r_squared <- mean(unlist(lapply(results, function (x) x[num_inputs + 1])))
   sd_adj_r_squared <- sd(unlist(lapply(results, function (x) x[num_inputs + 1])))

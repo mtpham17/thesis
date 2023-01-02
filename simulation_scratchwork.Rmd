@@ -375,12 +375,14 @@ one_run <- function(sample_size,
   result <- analyze(dat, p, fixed_beta)
   # feed back number of predictors, number of clusters, type of fixed beta coefficients (from paper)
   # the default value of beta, sigma of the random intercepts, number of 
-  return(c(sample_size, 
-            type, p, s, default,
-            cov_x, scale, base_mean_x, sigma_x, 
-            cov_rand_fixed,
-            mean_r, sigma_r, 
-            mean_noise, sigma_noise, result))
+  # return(c(sample_size, 
+  #           type, p, s, default,
+  #           cov_x, scale, base_mean_x, sigma_x, 
+  #           cov_rand_fixed,
+  #           mean_r, sigma_r, 
+  #           mean_noise, sigma_noise, result))
+  
+  return(result)
 }
 
 # sigma_r -- clusters are further and further apart
@@ -402,44 +404,17 @@ rerun_single_params <- function(df) {
                                           cov_rand_fixed = unname(df[11]),
                                           mean_r = unname(df[12]), sigma_r = unname(df[13]), 
                                           mean_noise = unname(df[14]), sigma_noise = unname(df[15])))
-                                
-  # return statement of one_run: return(c(j, n, type, p, s, default, cov_x, mean_x, sigma_x,
-  #          cov_rand_fixed, mean_r, sigma_r, mean_noise, 
-  #          sigma_noise, result))
   
-  # return statement of analyze: return(c(agreement, fixed_beta_rmse, mixed_beta_rmse, 
-  # fixed_accuracy, mixed_accuracy,
-  #        fixed_rmse, mixed_rmse))
+  results_length <- length(results[[1]])
   
-  # these are subject to change, but just so we're not hard coding anything for now?
-  num_metrics <- 7
-  num_inputs <- 14
+  mean_results <- sapply(1:results_length, 
+                         function(j) mean(unlist(lapply(results, function(x) x[j]))))
+  sd_results <- sapply(1:results_length, 
+                         function(j) sd(unlist(lapply(results, function(x) x[j]))))
   
-  ## NEED TO FIX THIS -- ALSO MAKE IT MORE EFFICIENT
-  
-  mean_adj_r_squared <- mean(unlist(lapply(results, function (x) x[num_inputs + 1])))
-  sd_adj_r_squared <- sd(unlist(lapply(results, function (x) x[num_inputs + 1])))
-    
-  mean_agreement <- mean(unlist(lapply(results, function (x) x[num_inputs + 2])))
-  sd_agreement <- sd(unlist(lapply(results, function (x) x[num_inputs + 2])))
-  
-  mean_beta_rmse_fixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 3])))
-  sd_beta_rmse_fixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 3])))
-  
-  mean_beta_rmse_mixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 4])))
-  sd_beta_rmse_mixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 4])))
-  
-  mean_accuracy_fixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 5])))
-  sd_accuracy_fixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 5])))
-  
-  mean_accuracy_mixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 6])))
-  sd_accuracy_mixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 6])))
-  
-  mean_rmse_fixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 7])))
-  sd_rmse_fixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 7])))
-  
-  mean_rmse_mixed <- mean(unlist(lapply(results, function (x) x[num_inputs + 8])))
-  sd_rmse_mixed <- sd(unlist(lapply(results, function (x) x[num_inputs + 8])))
+  row <- list()
+  row$sample_size <- unname(df[2])
+  row <- c(row, lapply(c()))
   
   row <- c(unname(df[1]), unname(df[2]), unname(df[3]), 
           unname(df[4]), unname(df[5]), 
@@ -448,14 +423,7 @@ rerun_single_params <- function(df) {
           unname(df[10]), unname(df[11]),
           unname(df[12]), unname(df[13]),
           unname(df[14]), unname(df[15]), 
-          mean_adj_r_squared, sd_adj_r_squared,
-          mean_agreement, sd_agreement, 
-          mean_beta_rmse_fixed, sd_beta_rmse_fixed,
-          mean_beta_rmse_mixed, sd_beta_rmse_mixed,
-          mean_accuracy_fixed, sd_accuracy_fixed,
-          mean_accuracy_mixed, sd_accuracy_mixed,
-          mean_rmse_fixed, sd_rmse_fixed,
-          mean_rmse_mixed, sd_rmse_mixed)
+          mean_results, sd_results)
   
   names(row) <- c("reps", "j", "n", "type", "p", "s", "default", "cov_x", "mean_x", 
                   "sigma_x", "cov_rand_fixed", "mean_r", "sigma_r", "mean_noise", "sigma_noise",

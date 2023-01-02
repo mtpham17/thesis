@@ -412,33 +412,17 @@ rerun_single_params <- function(df) {
   sd_results <- sapply(1:results_length, 
                          function(j) sd(unlist(lapply(results, function(x) x[j]))))
   
-  row <- list()
-  row$sample_size <- unname(df[2])
-  row <- c(row, lapply(c()))
+  row <- list(sapply(1:length(df), function(x) unname(df[x])), mean_results, sd_results)
   
-  row <- c(unname(df[1]), unname(df[2]), unname(df[3]), 
-          unname(df[4]), unname(df[5]), 
-          unname(df[6]), unname(df[7]),
-          unname(df[8]), unname(df[9]), 
-          unname(df[10]), unname(df[11]),
-          unname(df[12]), unname(df[13]),
-          unname(df[14]), unname(df[15]), 
-          mean_results, sd_results)
-  
-  names(row) <- c("reps", "j", "n", "type", "p", "s", "default", "cov_x", "mean_x", 
-                  "sigma_x", "cov_rand_fixed", "mean_r", "sigma_r", "mean_noise", "sigma_noise",
-                  "mean_adj_r2", "sd_adj_r2",
-                  "mean_agreement", "sd_agreemeent",
-                  "mean_beta_rmse_fixed", "sd_beta_rmse_fixed",
-                  "mean_beta_rmse_mixed", "sd_beta_rmse_mixed",
-                  "mean_accuracy_fixed", "sd_accuracy_fixed",
-                  "mean_accuracy_mixed", "sd_accuracy_mixed",
-                  "mean_rmse_fixed", "sd_rmse_fixed",
-                  "mean_rmse_mixed", "sd_rmse_mixed")
+  names(row) <- c(names(df), unname(sapply(names(results[[1]])), function(x) paste("mean_", x, sep = "")),
+                  unname(sapply(names(results[[1]])), function(x) paste("sd_", x, sep = "")))
 
   return(row)
 }
+```
 
+
+```{r}
 rerun_mult_parameters <- function(runs_vec, j_vec, n_vec, type_vec, p_vec,
                                   s_vec, default_vec, cov_x, mean_x_vec, sigma_x_vec,
                                   cov_rand_fixed_vec,

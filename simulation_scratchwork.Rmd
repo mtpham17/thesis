@@ -426,20 +426,25 @@ rerun_single_params <- function(df) {
 
 
 ```{r}
-rerun_mult_parameters <- function(runs_vec, j_vec, n_vec, type_vec, p_vec,
-                                  s_vec, default_vec, cov_x, mean_x_vec, sigma_x_vec,
+rerun_mult_parameters <- function(runs_vec, sample_size_vec,
+                                  type_vec, p_vec, s_vec, default_vec,
+                                  cov_x_vec, scale_vec, base_mean_x_vec, sigma_x_vec,
                                   cov_rand_fixed_vec,
-                                  mean_r_vec, sigma_r_vec,
+                                  mean_r_vec, sigma_r_vec, 
                                   mean_noise_vec, sigma_noise_vec) {
   
   ## NEED TO FIX THIS BECAUSE WE ARE NOW PASSING IN A LIST AS A PARAMETER -- SOMETHING TO ASK LUKE ABOUT? 
   ## TAKE A LOOK AT THE SIMULATION MANUAL AS WELL
   
-  combos <- expand.grid(runs = runs_vec, j = j_vec, n = n_vec, type = type_vec, p = p_vec,
-                        s = s_vec, default_beta = default_vec, cov_x = cov_x, 
-                        mean_x = mean_x_vec, sigma_x = sigma_x_vec,
+  ## current suggestion of a solution -- pass in string version of sample size. convert to vector later
+  ## ^^ this is kind of roundabout so look into other solutions before finalizing
+  
+  combos <- expand.grid(runs = runs_vec, sample_size = sample_size_vec,
+                        type = type_vec, p = p_vec, s = s_vec, default = default_vec,
+                        cov_x = cov_x_vec, scale = scale_vec, 
+                        base_mean_x = base_mean_x_vec, sigma_x = sigma_x_vec,
                         cov_rand_fixed = cov_rand_fixed_vec,
-                        mean_r = mean_r_vec, sigma_r = sigma_r_vec,
+                        mean_r = mean_r_vec, sigma_r = sigma_r_vec, 
                         mean_noise = mean_noise_vec, sigma_noise = sigma_noise_vec)
   
   results <- apply(combos, 1, rerun_single_params)

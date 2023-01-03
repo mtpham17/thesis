@@ -221,7 +221,7 @@ generate_data <- function(n_bar, J, alpha,
   
   sigma_noise <- diag(sigma_noise^2, p, p)
   sigma_noise[outer(1:p, 1:p, function(i,j) i!=j)] <- 1
-  measurement_noise <- rmvnorm(n = n, mean = rep(0, p), sigma_noise)
+  measurement_noise <- rmvnorm(n = n, mean = rep(mean_noise, p), sigma_noise)
   noisy_x <- x_all + measurement_noise
   
   data <- as.data.frame(cbind(noisy_x, random_beta))

@@ -191,14 +191,12 @@ rmse <- function(predicted, true) {
 # cov_x = covariance between covariates
 # mean_x = mean of covariates
 # sigma_x = standard deviation of covariate distribution
-# cov_rand_fixed = covariance between clusters and fixed beta coefficients (will probably have to modify the generate_beta function? may be a question for Luke)
 # mean_r = mean of random intercepts
 # sigma_r = standard deviation of random intercepts
 
 generate_data <- function(n_bar, J, alpha, 
                           type, p, s, default,
                           cov_x, scale, base_mean_x = 0, sigma_x = 1, 
-                          cov_rand_fixed,
                           mean_r = 0, sigma_r, 
                           mean_noise = 0, sigma_noise = 1) {
   
@@ -254,8 +252,8 @@ generate_data <- function(n_bar, J, alpha,
 
 test_df <- generate_data(n_bar = 20, J = 3, alpha = 0.2,
               type = 1, p = 5, s = 3, default = 1, 
-              cov_x = 0.5, scale = 30, base_mean_x = 0, sigma_x = 1, 
-              cov_rand_fixed = 0, mean_r = 0, sigma_r = 2,
+              cov_x = 0.5, scale = 1, base_mean_x = 0, sigma_x = 1, 
+              mean_r = 0, sigma_r = 1,
               mean_noise = 0, sigma_noise = 1)
 
 ```
@@ -264,9 +262,8 @@ test_df <- generate_data(n_bar = 20, J = 3, alpha = 0.2,
 library(ggplot2)
 ggplot(test_df,                    # Change colors of lines by group
        aes(x = X1,
-           y = Y,
-           group = j)) +
-  geom_point(aes(col = j))
+           y = X2)) +
+  geom_point()
 ```
 
 ```{r}
@@ -384,14 +381,12 @@ analyze(test_df, 5, test_beta)
 one_run <- function(n_bar, J, alpha, 
                     type, p, s, default,
                     cov_x, scale, base_mean_x = 0, sigma_x = 1, 
-                    cov_rand_fixed,
                     mean_r = 0, sigma_r, 
                     mean_noise = 0, sigma_noise = 1) {
   
   dat <- generate_data(n_bar, J, alpha, 
                     type, p, s, default,
                     cov_x, scale, base_mean_x = 0, sigma_x = 1, 
-                    cov_rand_fixed,
                     mean_r = 0, sigma_r, 
                     mean_noise = 0, sigma_noise = 1)
   
@@ -403,7 +398,6 @@ one_run <- function(n_bar, J, alpha,
   # return(c(sample_size, 
   #           type, p, s, default,
   #           cov_x, scale, base_mean_x, sigma_x, 
-  #           cov_rand_fixed,
   #           mean_r, sigma_r, 
   #           mean_noise, sigma_noise, result))
   
@@ -428,8 +422,7 @@ rerun_single_params <- function(df) {
                                           type = unname(df[5]), p = unname(df[6]), 
                                           s = unname(df[7]), default = unname(df[8]),
                                           cov_x = unname(df[9]), scale = unname(df[10]), 
-                                          base_mean_x = unname(df[11]), sigma_x = unname(df[12]), 
-                                          cov_rand_fixed = unname(df[13]),
+                                          base_mean_x = unname(df[11]), sigma_x = unname(df[12]),
                                           mean_r = unname(df[14]), sigma_r = unname(df[15]), 
                                           mean_noise = unname(df[16]), sigma_noise = unname(df[17])))
   
@@ -454,7 +447,6 @@ rerun_single_params <- function(df) {
 rerun_mult_parameters <- function(runs_vec, n_bar_vec, J_vec, alpha_vec,
                                   type_vec, p_vec, s_vec, default_vec,
                                   cov_x_vec, scale_vec, base_mean_x_vec, sigma_x_vec,
-                                  cov_rand_fixed_vec,
                                   mean_r_vec, sigma_r_vec, 
                                   mean_noise_vec, sigma_noise_vec) {
   
@@ -468,7 +460,6 @@ rerun_mult_parameters <- function(runs_vec, n_bar_vec, J_vec, alpha_vec,
                         type = type_vec, p = p_vec, s = s_vec, default = default_vec,
                         cov_x = cov_x_vec, scale = scale_vec, 
                         base_mean_x = base_mean_x_vec, sigma_x = sigma_x_vec,
-                        cov_rand_fixed = cov_rand_fixed_vec,
                         mean_r = mean_r_vec, sigma_r = sigma_r_vec, 
                         mean_noise = mean_noise_vec, sigma_noise = sigma_noise_vec)
   
@@ -501,7 +492,6 @@ set.seed(17)
 #                                         type_vec = c(1, 2, 3, 4, 5),
 #                                         p_vec = c(4, 8), s_vec = 2, default_vec = 1,
 #                                         cov_x = c(0, 0.5), mean_x_vec = 0, sigma_x_vec = 1,
-#                                         cov_rand_fixed_vec = 0,
 #                                         mean_r_vec = 0, sigma_r_vec = 1,
 #                                         mean_noise_vec = 0, sigma_noise_vec = 1)
 ```

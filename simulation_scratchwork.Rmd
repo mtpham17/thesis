@@ -225,11 +225,11 @@ generate_data <- function(n_bar, J, alpha,
 # check extreme cases (e.g., scale = 20) 
 # check things visually for each parameter (think about what happens in extreme cases, that should cause noticeable changes in distribution)
 
-test_df <- generate_data(n_bar = 20, J = 3, alpha = 0.2,
-              type = 1, p = 5, s = 3, default = 1, 
-              cov_x = 0.5, scale = 1, base_mean_x = 0, sigma_x = 1, 
-              mean_r = 0, sigma_r = 1,
-              mean_noise = 0, sigma_noise = 1)
+# test_df <- generate_data(n_bar = 20, J = 3, alpha = 0.2,
+              # type = 1, p = 5, s = 3, default = 1, 
+              # cov_x = 0.5, scale = 1, base_mean_x = 0, sigma_x = 1, 
+              # mean_r = 0, sigma_r = 1,
+              # mean_noise = 0, sigma_noise = 1)
 
 ```
 
@@ -349,8 +349,8 @@ analyze <- function(data, p, true_beta) {
            mixed_results))
 }
 
-test_beta <- generate_beta(1, 5, 3)
-results <- analyze(test_df, 5, test_beta)
+# test_beta <- generate_beta(1, 5, 3)
+# results <- analyze(test_df, 5, test_beta)
 
 ```
 
@@ -463,31 +463,59 @@ assess_performance <- function(results) {
 }
 ```
 
+
 ```{r}
 options(warn=-1)
 set.seed(17)
 
-prelim_results <- rerun_mult_parameters(runs_vec = 50, 
-                                        n_bar_vec = seq(from = 20, to = 100, by = 20),
-                                        J_vec = 2:5, 
-                                        alpha_vec = seq(from = 0, to = 1, 
-                                                        by = 0.2),
-                                        type_vec = 1:5,
-                                        p_vec = seq(from = 5, to = 20, by = 5), 
-                                        s_vec = seq(from = 1, to = 15, by = 5), 
-                                        default_vec = 1,
-                                        cov_x = seq(from = 0, to = 3, by = 1),
-                                        scale_vec = seq(from = 0, to = 3, by = 1),
-                                        base_mean_x_vec = 0, 
-                                        sigma_x_vec = 1,
-                                        mean_r_vec = 0, 
-                                        sigma_r_vec = seq(from = 0, to = 3, by = 1),
-                                        mean_noise_vec = 0, 
-                                        sigma_noise_vec = 1)
+one_set <- rerun_mult_parameters(runs_vec = 100, 
+                                n_bar_vec = 50,
+                                J_vec = 5, 
+                                alpha_vec = 0.5,
+                                type_vec = 1,
+                                p_vec = 8, 
+                                s_vec = 4, 
+                                default_vec = 1,
+                                cov_x = 3,
+                                scale_vec = 1,
+                                base_mean_x_vec = 0, 
+                                sigma_x_vec = 1,
+                                mean_r_vec = 0, 
+                                sigma_r_vec = 2,
+                                mean_noise_vec = 0, 
+                                sigma_noise_vec = 1)
+
+one_set_results <- assess_performance(one_set)
+write.csv(one_set_results, "/n/home04/thupham17/fasrc/one_set_results.csv")
+```
+
+
+
+```{r}
+# options(warn=-1)
+# set.seed(17)
+# 
+# prelim_results <- rerun_mult_parameters(runs_vec = 100, 
+#                                         n_bar_vec = seq(from = 20, to = 100, by = 20),
+#                                         J_vec = seq(from = 2, to = 10, by = 2), 
+#                                         alpha_vec = seq(from = 0, to = 1, 
+#                                                         by = 0.25),
+#                                         type_vec = 1:5,
+#                                         p_vec = seq(from = 2, to = 20, by = 6), 
+#                                         s_vec = seq(from = 1, to = 20, by = 6), 
+#                                         default_vec = 1,
+#                                         cov_x = seq(from = 0, to = 6, by = 3),
+#                                         scale_vec = seq(from = 0, to = 6, by = 3),
+#                                         base_mean_x_vec = 0, 
+#                                         sigma_x_vec = 1,
+#                                         mean_r_vec = 0, 
+#                                         sigma_r_vec = seq(from = 0, to = 4, by = 2),
+#                                         mean_noise_vec = 0, 
+#                                         sigma_noise_vec = 1)
 ```
 
 ```{r}
-results <- assess_performance(prelim_results)
-save(results,file="prelim_results.Rda")
+# results <- assess_performance(prelim_results)
+# write.csv(results, "/n/home04/thupham17/fasrc/results.csv")
 ```
 

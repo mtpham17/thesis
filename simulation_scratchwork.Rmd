@@ -29,13 +29,13 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 
 # https://rdrr.io/cran/glmmLasso/src/demo/glmmLasso-soccer.r
 cv_glmmLasso <- function(data, formula, rand=list(j=~1),
-                         lambda_step=100) {
+                      lambda_step=100) {
   # fixing the min lambda for now -- let's see if that solve our problem
   # min_lambda <- 0.001 
   
   # lambdas <- seq(from=min_lambda, to=10, 
                  # by=(10 - min_lambda) / lambda_step)
-  lambdas <- 10 ^ seq(10,-2,length = 100)
+  lambdas <- 10 ^ seq(5,-2,length = 20)
   # print(lambdas)
   
   N <- dim(data)[1]

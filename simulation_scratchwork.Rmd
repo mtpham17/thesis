@@ -16,6 +16,8 @@ library(mvtnorm)
 library(dplyr)
 library(glmnet)
 library(glmmLasso)
+library(future)
+library(furrr)
 ```
 
 ```{r}
@@ -82,6 +84,8 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
   # print(paste("min lambda:", lambdas[which.min(pred_error_vec)]))
   return(lambdas[which.min(pred_error_vec)])  
 }
+
+## run a simulation with a lot of lambdas, get a range of lambdas that we consistently see across these simulations. restrict the range based on those results
 ```
 
 ```{r}
@@ -188,6 +192,7 @@ generate_data <- function(n_bar, J, alpha,
   fixed_beta <- generate_beta(type, p, s, default)
   
   sigma <- diag(sigma_x^2 - cov_x, p, p) + matrix(cov_x, nrow = p, ncol = p)
+  print(sigma)
   mean_x <- matrix(rep(scale * random_beta, p), nrow = n, ncol = p)
   x_all <- rmvnorm(n = n, mean = rep(base_mean_x, p), sigma)
   
@@ -465,28 +470,37 @@ assess_performance <- function(results) {
 
 
 ```{r}
+library(tictoc)
 options(warn=-1)
 set.seed(17)
+plan(multisession, workers = parallel::detectCores() - 1)
 
-one_set <- rerun_mult_parameters(runs_vec = 100, 
-                                n_bar_vec = 50,
-                                J_vec = 5, 
-                                alpha_vec = 0.5,
-                                type_vec = 1,
-                                p_vec = 8, 
-                                s_vec = 4, 
-                                default_vec = 1,
-                                cov_x = 3,
-                                scale_vec = 1,
-                                base_mean_x_vec = 0, 
-                                sigma_x_vec = 1,
-                                mean_r_vec = 0, 
-                                sigma_r_vec = 2,
-                                mean_noise_vec = 0, 
-                                sigma_noise_vec = 1)
+params <- list(runs_vec = 10,
+               n_bar_vec = 50,
+               J_vec = 5,
+               alpha_vec = 0.5,
+               type_vec = 1,
+               p_vec = 8,
+               s_vec = 4,
+               default_vec = 1,
+               cov_x = 0.5,
+               scale_vec = 1,
+               base_mean_x_vec = 0,
+               sigma_x_vec = 1,
+               mean_r_vec = 0,
+               sigma_r_vec = 2,
+               mean_noise_vec = 0,
+               sigma_noise_vec = 1)
+
+tic("10 iterations one set")
+one_set <- future_pmap(params, rerun_mult_parameters)
+Sys.sleep(1)
+toc()
+# takes 50 seconds for 10 iterations of one set, with 1 core?
+# takes 57 seconds for 10 iterations of one set, with 6 cores?? doesn't make sense lol
 
 one_set_results <- assess_performance(one_set)
-write.csv(one_set_results, "/n/home04/thupham17/fasrc/one_set_results.csv")
+# write.csv(one_set_results, "/n/home04/thupham17/fasrc/one_set_results.csv")
 ```
 
 
@@ -517,5 +531,32 @@ write.csv(one_set_results, "/n/home04/thupham17/fasrc/one_set_results.csv")
 ```{r}
 # results <- assess_performance(prelim_results)
 # write.csv(results, "/n/home04/thupham17/fasrc/results.csv")
+```
+
+```{r}
+# Profiling R Code
+# to profile code with system time method, etc.
+
+# quickadd <- function(g){
+# *return(g+1)*
+# *}*
+# 
+# *slowadd <- function(g){*
+# *h <- rep(NA, length(g))*
+# *for (i in 1:length(g)){*
+# *h[i] <- g[i] + 1*
+# *}*
+# *return(h)*
+# *}*
+# 
+# *system.time(a <- slowadd(g))*
+# user system elapsed
+# 0.34 0.00 0.34
+# 
+# *system.time(a <- quickadd(g))*
+# user system elapsed
+# 0 0 0
+
+#code
 ```
 

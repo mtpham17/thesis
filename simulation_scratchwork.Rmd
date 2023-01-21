@@ -214,6 +214,7 @@ generate_data <- function(n_bar, J, alpha,
   
   # error term 
   epsilon <- rnorm(n)
+  # add a comment 1/21 for git testing purposes....
   
   # now, relaxing the assumption of how strong our measures are. per Luke's suggestion,
   # add the noise into the covariates so that we preserve the structure from earlier.

@@ -6,7 +6,7 @@ date: '2023-01-12'
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = '/Users/thupham/Desktop/senior-yr/thesis/elsah-coptop')
+knitr::opts_knit$set(root.dir = '/Users/thupham/Desktop/thesis')
 library(readstata13)
 library(tidyverse)
 library(glmnet)
@@ -192,7 +192,6 @@ generate_data <- function(n_bar, J, alpha,
   fixed_beta <- generate_beta(type, p, s, default)
   
   sigma <- diag(sigma_x^2 - cov_x, p, p) + matrix(cov_x, nrow = p, ncol = p)
-  print(sigma)
   mean_x <- matrix(rep(scale * random_beta, p), nrow = n, ncol = p)
   x_all <- rmvnorm(n = n, mean = rep(base_mean_x, p), sigma)
   
@@ -400,19 +399,34 @@ one_run <- function(n_bar, J, alpha,
 
 
 ```{r}
-rerun_single_params <- function(df) {
+rerun_single_params <- function(chunkNo, seed, reps,
+                           n_bar, J, alpha,
+                           type, p, s, default, cov_x,
+                           scale, base_mean_x, sigma_x,
+                           mean_r, sigma_r, mean_noise, sigma_noise) {
   print("starting an iteration")
   # print(df[7])
-  
-  results <- rerun(df$reps, one_run(n_bar = df$n_bar, J = df$J, 
-                                          alpha = df$alpha, 
-                                          type = df$type, p = df$p, 
-                                          s = df$s, default = df$default,
-                                          cov_x = df$cov_x, scale = df$scale, 
-                                          base_mean_x = df$base_mean_x, sigma_x = df$sigma_x,
-                                          mean_r = df$mean_r, sigma_r = df$sigma_r, 
-                                          mean_noise = df$mean_noise, 
-                                          sigma_noise = df$sigma_noise))
+  set.seed(seed)
+  results <- rerun(reps, one_run(n_bar = n_bar, J = J,
+                                       alpha = alpha,
+                                       type = type, p = p,
+                                       s = s, default = default,
+                                       cov_x = cov_x, scale = scale,
+                                       base_mean_x = base_mean_x,
+                                       sigma_x = sigma_x,
+                                       mean_r = mean_r, sigma_r = sigma_r,
+                                       mean_noise = mean_noise,
+                                       sigma_noise = sigma_noise))
+  # results <- rerun(df[["reps"]], one_run(n_bar = df[["n_bar"]], J = df[["J"]],
+  #                                        alpha = df[["alpha"]],
+  #                                        type = df[["type"]], p = df[["p"]],
+  #                                        s = df[["s"]], default = df[["default"]],
+  #                                        cov_x = df[["cov_x"]], scale = df[["scale"]],
+  #                                        base_mean_x = df[["base_mean_x"]],
+  #                                        sigma_x = df[["sigma_x"]],
+  #                                        mean_r = df[["mean_r"]], sigma_r = df[["sigma_r"]],
+  #                                        mean_noise = df[["mean_noise"]],
+  #                                        sigma_noise = df[["sigma_noise"]]))
   
   results_length <- length(results[[1]])
   
@@ -421,11 +435,15 @@ rerun_single_params <- function(df) {
   sd_results <- sapply(1:results_length, 
                          function(j) sd(unlist(lapply(results, function(x) x[j]))))
   
-  row <- c(sapply(1:length(df), function(x) unname(df[x])), mean_results, sd_results)
+  row <- c(chunkNo, seed, reps, n_bar, J, alpha,
+           type, p, s, default, cov_x, scale, base_mean_x, sigma_x,
+           mean_r, sigma_r, mean_noise, sigma_noise, mean_results, sd_results)
   # print(row)
   # print(unname(sapply(names(results[[1]]), function(x) paste("mean_", x, sep = ""))))
   
-  names(row) <- c(names(df), 
+  names(row) <- c("chunkNo", "seed", "reps", "n_bar", "J", "alpha",
+                  "type", "p", "s", "default", "cov_x", "scale", "base_mean_x", "sigma_x",
+                  "mean_r", "sigma_r", "mean_noise", "sigma_noise", 
                   unname(sapply(names(results[[1]]), function(x) paste("mean_", x, sep = ""))),
                   unname(sapply(names(results[[1]]), function(x) paste("sd_", x, sep = ""))))
 
@@ -433,52 +451,33 @@ rerun_single_params <- function(df) {
 }
 ```
 
-
 ```{r}
-rerun_mult_parameters <- function(combos) {
-  
-  ## NEED TO FIX THIS BECAUSE WE ARE NOW PASSING IN A LIST AS A PARAMETER -- SOMETHING TO ASK LUKE ABOUT? 
-  ## TAKE A LOOK AT THE SIMULATION MANUAL AS WELL
-  
-  ## current suggestion of a solution -- pass in string version of sample size. convert to vector later
-  ## ^^ this is kind of roundabout so look into other solutions before finalizing
-  
-  # combos <- expand.grid(runs = runs_vec, n_bar = n_bar_vec, J = J_vec, alpha = alpha_vec,
-  #                       type = type_vec, p = p_vec, s = s_vec, default = default_vec,
-  #                       cov_x = cov_x_vec, scale = scale_vec, 
-  #                       base_mean_x = base_mean_x_vec, sigma_x = sigma_x_vec,
-  #                       mean_r = mean_r_vec, sigma_r = sigma_r_vec, 
-  #                       mean_noise = mean_noise_vec, sigma_noise = sigma_noise_vec)
-  
-  results <- apply(combos, 1, rerun_single_params)
-  print("finished one set of parameters")
-  
-  return(results)
-  
-}
-
-
-
-# Summarize
-assess_performance <- function(results) {
-  # stuff
-  return(as.data.frame(t(results)))
-}
-```
-
-```{r}
-source("pack_simulation_functions.R")
-safe_run_sim = safely(rerun_mult_parameters)
-file_saving_sim = function(chunkNo, seed, ...) {
-    fname = paste0( "results/frags/fragment_", chunkNo, "_", seed, ".rds" )
+# source("pack_simulation_functions.R")
+safe_run_sim = safely(rerun_single_params)
+file_saving_sim = function(chunkNo, seed, reps,
+                           n_bar, J, alpha,
+                           type, p, s, default, cov_x,
+                           scale, base_mean_x, sigma_x,
+                           mean_r, sigma_r, mean_noise, sigma_noise) 
+  {
+    fname = paste0("/Users/thupham/Desktop/thesis/results", chunkNo, "_", seed, ".csv")
+    print(fname)
     res = NA
     if (!file.exists(fname)) {
-        res = safe_run_sim(chunkNo=chunkNo, seed=seed, ...)
-        saveRDS(res, file = fname )
+        res = rerun_single_params(chunkNo = chunkNo, seed = seed, reps = reps,
+                           n_bar = n_bar, J = J, alpha = alpha,
+                           type = type, p = p, s = s, default = default, cov_x = cov_x,
+                           scale = scale, base_mean_x = base_mean_x, sigma_x = sigma_x,
+                           mean_r = mean_r, sigma_r = sigma_r, mean_noise = mean_noise, 
+                           sigma_noise = sigma_noise)
+        print(res)
+        res <- as.data.frame(t(res))
+        print(res)
+        write.csv(res, fname)
     } else {
-        res = readRDS( file=fname )
+        res = read.csv(file = fname)
     }
-    return( res )
+    return(res)
 }
 ```
 
@@ -488,7 +487,8 @@ options(warn=-1)
 R <- 10
 M_CHUNK = 2
 
-params <- expand.grid(n_bar = 50, 
+params <- expand.grid(chunkNo = 1:M_CHUNK,
+                      n_bar = 50, 
                       J = 5, 
                       alpha = 0.5,
                       type = 1,
@@ -510,9 +510,8 @@ params <- params %>% mutate(
 )
 
 tictoc::tic("10 iterations one set")
-factors = sample_n(factors, nrow(factors) )
 
-if ( TRUE ) {
+if (TRUE) {
     # Run in parallel
     
     library(future)
@@ -522,13 +521,14 @@ if ( TRUE ) {
     #plan(multicore)
     plan(multisession, workers = parallel::detectCores() - 2 )
     
-    params$results <- future_pmap(params, .f = file_saving_sim,
+    results <- future_pmap(params, .f = file_saving_sim,
                           .options = furrr_options(seed = NULL),
-                          .progress = TRUE )
+                          .progress = TRUE)
+    print(results)
     
 } else {
   # Run not in parallel, used for debugging
-  factors$res <- pmap(factors, .f = file_saving_sim )
+  params$res <- pmap(params, .f = file_saving_sim )
 }
 
 tictoc::toc()
@@ -536,8 +536,6 @@ Sys.sleep(1)
 tictoc::toc()
 # takes 50 seconds for 10 iterations of one set, with 1 core?
 # takes 57 seconds for 10 iterations of one set, with 6 cores?? doesn't make sense lol
-
-one_set_results <- assess_performance(one_set)
 # write.csv(one_set_results, "/n/home04/thupham17/fasrc/one_set_results.csv")
 ```
 

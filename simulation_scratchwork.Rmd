@@ -404,13 +404,15 @@ rerun_single_params <- function(df) {
   print("starting an iteration")
   # print(df[7])
   
-  results <- rerun(unname(df[1]), one_run(n_bar = unname(df[2]), J = unname(df[3]), alpha = unname(df[4]), 
-                                          type = unname(df[5]), p = unname(df[6]), 
-                                          s = unname(df[7]), default = unname(df[8]),
-                                          cov_x = unname(df[9]), scale = unname(df[10]), 
-                                          base_mean_x = unname(df[11]), sigma_x = unname(df[12]),
-                                          mean_r = unname(df[14]), sigma_r = unname(df[15]), 
-                                          mean_noise = unname(df[16]), sigma_noise = unname(df[17])))
+  results <- rerun(df$reps, one_run(n_bar = df$n_bar, J = df$J, 
+                                          alpha = df$alpha, 
+                                          type = df$type, p = df$p, 
+                                          s = df$s, default = df$default,
+                                          cov_x = df$cov_x, scale = df$scale, 
+                                          base_mean_x = df$base_mean_x, sigma_x = df$sigma_x,
+                                          mean_r = df$mean_r, sigma_r = df$sigma_r, 
+                                          mean_noise = df$mean_noise, 
+                                          sigma_noise = df$sigma_noise))
   
   results_length <- length(results[[1]])
   
@@ -433,11 +435,7 @@ rerun_single_params <- function(df) {
 
 
 ```{r}
-rerun_mult_parameters <- function(runs_vec, n_bar_vec, J_vec, alpha_vec,
-                                  type_vec, p_vec, s_vec, default_vec,
-                                  cov_x_vec, scale_vec, base_mean_x_vec, sigma_x_vec,
-                                  mean_r_vec, sigma_r_vec, 
-                                  mean_noise_vec, sigma_noise_vec) {
+rerun_mult_parameters <- function(combos) {
   
   ## NEED TO FIX THIS BECAUSE WE ARE NOW PASSING IN A LIST AS A PARAMETER -- SOMETHING TO ASK LUKE ABOUT? 
   ## TAKE A LOOK AT THE SIMULATION MANUAL AS WELL
@@ -445,12 +443,12 @@ rerun_mult_parameters <- function(runs_vec, n_bar_vec, J_vec, alpha_vec,
   ## current suggestion of a solution -- pass in string version of sample size. convert to vector later
   ## ^^ this is kind of roundabout so look into other solutions before finalizing
   
-  combos <- expand.grid(runs = runs_vec, n_bar = n_bar_vec, J = J_vec, alpha = alpha_vec,
-                        type = type_vec, p = p_vec, s = s_vec, default = default_vec,
-                        cov_x = cov_x_vec, scale = scale_vec, 
-                        base_mean_x = base_mean_x_vec, sigma_x = sigma_x_vec,
-                        mean_r = mean_r_vec, sigma_r = sigma_r_vec, 
-                        mean_noise = mean_noise_vec, sigma_noise = sigma_noise_vec)
+  # combos <- expand.grid(runs = runs_vec, n_bar = n_bar_vec, J = J_vec, alpha = alpha_vec,
+  #                       type = type_vec, p = p_vec, s = s_vec, default = default_vec,
+  #                       cov_x = cov_x_vec, scale = scale_vec, 
+  #                       base_mean_x = base_mean_x_vec, sigma_x = sigma_x_vec,
+  #                       mean_r = mean_r_vec, sigma_r = sigma_r_vec, 
+  #                       mean_noise = mean_noise_vec, sigma_noise = sigma_noise_vec)
   
   results <- apply(combos, 1, rerun_single_params)
   print("finished one set of parameters")
@@ -468,34 +466,74 @@ assess_performance <- function(results) {
 }
 ```
 
+```{r}
+source("pack_simulation_functions.R")
+safe_run_sim = safely(rerun_mult_parameters)
+file_saving_sim = function(chunkNo, seed, ...) {
+    fname = paste0( "results/frags/fragment_", chunkNo, "_", seed, ".rds" )
+    res = NA
+    if (!file.exists(fname)) {
+        res = safe_run_sim(chunkNo=chunkNo, seed=seed, ...)
+        saveRDS(res, file = fname )
+    } else {
+        res = readRDS( file=fname )
+    }
+    return( res )
+}
+```
 
 ```{r}
-library(tictoc)
 options(warn=-1)
-set.seed(17)
-plan(multisession, workers = parallel::detectCores() - 1)
 
-params <- list(runs_vec = 10,
-               n_bar_vec = 50,
-               J_vec = 5,
-               alpha_vec = 0.5,
-               type_vec = 1,
-               p_vec = 8,
-               s_vec = 4,
-               default_vec = 1,
-               cov_x = 0.5,
-               scale_vec = 1,
-               base_mean_x_vec = 0,
-               sigma_x_vec = 1,
-               mean_r_vec = 0,
-               sigma_r_vec = 2,
-               mean_noise_vec = 0,
-               sigma_noise_vec = 1)
+R <- 10
+M_CHUNK = 2
 
-tic("10 iterations one set")
-one_set <- future_pmap(params, rerun_mult_parameters)
+params <- expand.grid(n_bar = 50, 
+                      J = 5, 
+                      alpha = 0.5,
+                      type = 1,
+                      p = 8,
+                      s = 4,
+                      default = 1,
+                      cov_x = 0.5,
+                      scale = 1,
+                      base_mean_x = 0,
+                      sigma_x = 1,
+                      mean_r = 0,
+                      sigma_r = 2,
+                      mean_noise = 0,
+                      sigma_noise = 1)
+
+params <- params %>% mutate(
+    reps = R / M_CHUNK,
+    seed = 17 + 1:n()
+)
+
+tictoc::tic("10 iterations one set")
+factors = sample_n(factors, nrow(factors) )
+
+if ( TRUE ) {
+    # Run in parallel
+    
+    library(future)
+    library(furrr)
+    
+    #plan(multiprocess) # choose an appropriate plan from future package
+    #plan(multicore)
+    plan(multisession, workers = parallel::detectCores() - 2 )
+    
+    params$results <- future_pmap(params, .f = file_saving_sim,
+                          .options = furrr_options(seed = NULL),
+                          .progress = TRUE )
+    
+} else {
+  # Run not in parallel, used for debugging
+  factors$res <- pmap(factors, .f = file_saving_sim )
+}
+
+tictoc::toc()
 Sys.sleep(1)
-toc()
+tictoc::toc()
 # takes 50 seconds for 10 iterations of one set, with 1 core?
 # takes 57 seconds for 10 iterations of one set, with 6 cores?? doesn't make sense lol
 

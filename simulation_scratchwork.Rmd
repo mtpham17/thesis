@@ -20,6 +20,7 @@ library(future)
 library(furrr)
 ```
 
+
 ```{r}
 # cross validation helper function for the glmmLasso
 # need to eventually do this with k-folds, or get as close to the 
@@ -31,13 +32,14 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 
 # https://rdrr.io/cran/glmmLasso/src/demo/glmmLasso-soccer.r
 cv_glmmLasso <- function(data, formula, rand=list(j=~1),
-                      lambda_step=100) {
+                      lambda_step=20, lambda_min = lambda_min,
+                      lambda_max = lambda_max) {
   # fixing the min lambda for now -- let's see if that solve our problem
   # min_lambda <- 0.001 
   
   # lambdas <- seq(from=min_lambda, to=10, 
                  # by=(10 - min_lambda) / lambda_step)
-  lambdas <- 10 ^ seq(5,-2,length = 20)
+  lambdas <- seq(lambda_min, lambda_max, length = lambda_step)
   # print(lambdas)
   
   N <- dim(data)[1]
@@ -71,8 +73,13 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
             
         if(!inherits(glm, "try-error"))
         {  
-          y_hat<-predict(glm, data_test)  
+          y_hat <- predict(glm, data_test)  
           pred_error[j,i]<- sqrt(sum((data_test$Y - y_hat)^2) / nrow(data_test))
+        }
+        
+        else 
+        {
+          return("error in choosing lambda value")
         }
     }
   }
@@ -229,12 +236,62 @@ generate_data <- function(n_bar, J, alpha,
 # check extreme cases (e.g., scale = 20) 
 # check things visually for each parameter (think about what happens in extreme cases, that should cause noticeable changes in distribution)
 
-# test_df <- generate_data(n_bar = 20, J = 3, alpha = 0.2,
-              # type = 1, p = 5, s = 3, default = 1, 
-              # cov_x = 0.5, scale = 1, base_mean_x = 0, sigma_x = 1, 
-              # mean_r = 0, sigma_r = 1,
-              # mean_noise = 0, sigma_noise = 1)
+test_df <- generate_data(n_bar = 20, J = 3, alpha = 0.2,
+  type = 1, p = 5, s = 3, default = 1,
+  cov_x = 0.5, scale = 1, base_mean_x = 0, sigma_x = 1,
+  mean_r = 0, sigma_r = 1,
+  mean_noise = 0, sigma_noise = 1)
 
+```
+
+
+```{r}
+# finding range of lambdas to feed into cv_glmmLasso later
+# these parameters are the most "extreme" values
+lambda_range <- function(data, p, baseline_min_lambda = 10^(-2), baseline_max_lambda = 10^4,
+                         lambda_no = 100) {
+    
+    var.names <- paste("X", 1:p, sep = "")
+    com.names <- lapply(seq_along(var.names),
+                        function(i) combn(var.names, i, FUN = paste, collapse = " + "))
+    covariates <- com.names[[p]]
+    
+    lambdas <- seq(baseline_min_lambda, baseline_max_lambda, length = lambda_no)
+    min_lambda <- NA
+    max_lambda <- NA
+    
+    for (l in lambdas) {
+      mixed_lasso <- glmmLasso(fix = as.formula(paste("Y ~", covariates)),
+                           rnd=list(j=~1),
+                           data = data,
+                           lambda = l,
+                           final.re = TRUE)
+      print(mixed_lasso$coefficients[2:(p + 1)])
+        
+      if (sum(mixed_lasso$coefficients[2:(p + 1)] != 0) == p) {
+        min_lambda <- l
+        break
+      } 
+    }
+    
+    for (l in rev(lambdas)) {
+      
+    mixed_lasso <- glmmLasso(fix = as.formula(paste("Y ~", covariates)),
+                 rnd=list(j=~1),
+                 data = data,
+                 lambda = l,
+                 final.re = TRUE)
+        
+      if (sum(mixed_lasso$coefficients[2:(p + 1)] != 0) == 0) {
+        max_lambda <- l
+        break
+      }
+    }
+    
+    return(c(min_lambda, max_lambda))
+  
+  
+}
 ```
 
 ```{r}
@@ -295,46 +352,34 @@ analyze <- function(data, p, true_beta) {
                     function(i) combn(var.names, i, FUN = paste, collapse = " + "))
   covariates <- com.names[[p]]
   
-  # indi <- sample(0.80 * nrow(data), 1:nrow(data), replace = FALSE)
-  # 
-  # data_train <- data[-indi,]
-  # data_test <-data[indi,]
-  
   X_fixed <- model.matrix(as.formula(paste("Y ~", covariates)),
                           data = data)
   X_fixed <- X_fixed[, -1]
 
-  # call cv.glmnet()
   model_lasso_fixed <- cv.glmnet(x = X_fixed, y = data$Y, nfolds = 5, alpha = 1)
-  coefficients_fixed <- coef(model_lasso_fixed, s = model_lasso_fixed$lambda.min)[2:(length(true_beta) + 1)]
-  # return(glmnet(X_fixed, data$Y, alpha = 1,
-  #               lambda = model_lasso_fixed$lambda.min))
+  coefficients_fixed <- coef(model_lasso_fixed, s = 
+                               model_lasso_fixed$lambda.min)[2:(length(true_beta) + 1)]
   
-  lambda_min <- cv_glmmLasso(data = data,
-                             formula = as.formula(paste("Y ~", covariates)))
+  lambda_range <- lambda_range(data, p)
+  
+  best_lambda <- cv_glmmLasso(data = data,
+                             formula = as.formula(paste("Y ~", covariates)), 
+                             lambda_min = lambda_range[1], lambda_max = lambda_range[2])
   # print(lambda_min) 
   model_lasso_mixed <- glmmLasso(fix = as.formula(paste("Y ~", covariates)),
                                  rnd=list(j=~1),
                                  data = data,
-                                 lambda=lambda_min,
+                                 lambda=best_lambda,
                                  final.re = TRUE)
-  coefficients_mixed <- model_lasso_mixed$coefficients[2:(length(true_beta) + 1)]
-  # print(coefficients_fixed)
-  # print(coefficients_mixed)
-  # coefficients <- cbind(as.matrix(coefficients_fixed), as.matrix(coefficients_mixed))
-  # colnames(coefficients) <- c("fixed", "mixed")
-  # coefs_df <- as.data.frame(coefficients[2:nrow(coefficients), ])
   
-  # report R^2 as a measure of signal to noise ratio
+  coefficients_mixed <- model_lasso_mixed$coefficients[2:(length(true_beta) + 1)]
+
   
   basic_linear <- lm(as.formula(paste("Y ~", covariates)), data = data)
   
   # "the two models agreed on ___ percent of the covariates" -- agreement defined as they both 
   # deemed a beta as non-zero out of the total significant betas. not really sure if this
   # is legitimate though
-  
-  # do I need to use train and test for the agreement? no, right? (because I'm only fitting one
-  # model)?
   
   agreement <- sum((coefficients_fixed != 0 & coefficients_mixed != 0) |
                   (coefficients_fixed == 0 & coefficients_mixed == 0)) / p
@@ -461,6 +506,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, mean_noise, sigma_noise) 
   {
     fname = paste0("/Users/thupham/Desktop/thesis/results/", chunkNo, "_", seed, ".csv")
+    # fname = paste0("/n/home04/thupham17/fasrc/results/", chunkNo, "_", seed, ".csv")
     res = NA
     if (!file.exists(fname)) {
         res <- safe_run_sim(chunkNo = chunkNo, seed = seed, reps = reps,
@@ -481,8 +527,8 @@ file_saving_sim = function(chunkNo, seed, reps,
 ```{r}
 options(warn=-1)
 
-R <- 10
-M_CHUNK = 2
+R <- 1000
+M_CHUNK = 50
 
 params <- expand.grid(chunkNo = 1:M_CHUNK,
                       n_bar = 50, 

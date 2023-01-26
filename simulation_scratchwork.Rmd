@@ -460,8 +460,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            scale, base_mean_x, sigma_x,
                            mean_r, sigma_r, mean_noise, sigma_noise) 
   {
-    fname = paste0("/Users/thupham/Desktop/thesis/results", chunkNo, "_", seed, ".csv")
-    print(fname)
+    fname = paste0("/Users/thupham/Desktop/thesis/results/", chunkNo, "_", seed, ".csv")
     res = NA
     if (!file.exists(fname)) {
         res <- safe_run_sim(chunkNo = chunkNo, seed = seed, reps = reps,
@@ -489,8 +488,8 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       n_bar = 50, 
                       J = 5, 
                       alpha = 0.5,
-                      type = 1,
-                      p = 8,
+                      type = 1:5,
+                      p = c(4, 6, 8),
                       s = 4,
                       default = 1,
                       cov_x = 0.5,
@@ -522,19 +521,16 @@ if (TRUE) {
     results <- future_pmap(params, .f = file_saving_sim,
                           .options = furrr_options(seed = NULL),
                           .progress = TRUE)
-    print(results)
     
 } else {
   # Run not in parallel, used for debugging
   params$res <- pmap(params, .f = file_saving_sim )
 }
 
-tictoc::toc()
 Sys.sleep(1)
 tictoc::toc()
 # takes 50 seconds for 10 iterations of one set, with 1 core?
 # takes 57 seconds for 10 iterations of one set, with 6 cores?? doesn't make sense lol
-# write.csv(one_set_results, "/n/home04/thupham17/fasrc/one_set_results.csv")
 ```
 
 

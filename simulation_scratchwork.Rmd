@@ -464,15 +464,13 @@ file_saving_sim = function(chunkNo, seed, reps,
     print(fname)
     res = NA
     if (!file.exists(fname)) {
-        res = rerun_single_params(chunkNo = chunkNo, seed = seed, reps = reps,
+        res <- safe_run_sim(chunkNo = chunkNo, seed = seed, reps = reps,
                            n_bar = n_bar, J = J, alpha = alpha,
                            type = type, p = p, s = s, default = default, cov_x = cov_x,
                            scale = scale, base_mean_x = base_mean_x, sigma_x = sigma_x,
                            mean_r = mean_r, sigma_r = sigma_r, mean_noise = mean_noise, 
                            sigma_noise = sigma_noise)
-        print(res)
-        res <- as.data.frame(t(res))
-        print(res)
+        res <- as.data.frame(t(res$result))
         write.csv(res, fname)
     } else {
         res = read.csv(file = fname)

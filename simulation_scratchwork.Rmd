@@ -520,6 +520,8 @@ if (TRUE) {
                           .options = furrr_options(seed = NULL),
                           .progress = TRUE)
     
+    plan(sequential)
+    
 } else {
   # Run not in parallel, used for debugging
   params$res <- pmap(params, .f = file_saving_sim )

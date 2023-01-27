@@ -442,8 +442,8 @@ file_saving_sim = function(chunkNo, seed, reps,
                            scale, base_mean_x, sigma_x,
                            mean_r, sigma_r, mean_noise, sigma_noise) 
   {
-    fname = paste0("/Users/thupham/Desktop/thesis/results/", chunkNo, "_", seed, ".csv")
-    # fname = paste0("/n/home04/thupham17/fasrc/results/", chunkNo, "_", seed, ".csv")
+    # fname = paste0("/Users/thupham/Desktop/thesis/results/", chunkNo, "_", seed, ".csv")
+    fname = paste0("/n/home04/thupham17/thesis/results/", chunkNo, "_", seed, ".csv")
     res = NA
     if (!file.exists(fname)) {
         res <- safe_run_sim(chunkNo = chunkNo, seed = seed, reps = reps,
@@ -528,6 +528,7 @@ if (TRUE) {
 Sys.sleep(1)
 tictoc::toc()
 # 10 iterations one set: 19.772 sec elapsed, with 6 cores?? 
+# 10 iterations one set: 20.74 sec elapsed, with 46 cores??
 ```
 
 

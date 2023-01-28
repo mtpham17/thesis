@@ -471,8 +471,8 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       n_bar = 50, 
                       J = 5, 
                       alpha = 0.5,
-                      type = 1:5,
-                      p = seq(2, 8, by = 2),
+                      type = 1,
+                      p = seq(4, 12, by = 2),
                       s = 4,
                       default = 1,
                       cov_x = 0.5,
@@ -488,8 +488,8 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
 #                       n_bar = 50, 
 #                       J = 5, 
 #                       alpha = 0.5,
-#                       type = 1:5,
-#                       p = c(4, 6, 8),
+#                       type = 1,
+#                       p = 8,
 #                       s = 4,
 #                       default = 1,
 #                       cov_x = 0.5,
@@ -505,6 +505,8 @@ params <- params %>% mutate(
     reps = R / M_CHUNK,
     seed = 17 + 1:n()
 )
+
+sink("/n/home04/thupham17/thesis/results/output.txt")
 
 tictoc::tic("10 iterations one set")
 
@@ -529,6 +531,8 @@ if (TRUE) {
 
 Sys.sleep(1)
 tictoc::toc()
+
+sink()
 # 10 iterations one set: 19.772 sec elapsed, with 6 cores?? 
 # 10 iterations one set: 20.74 sec elapsed, with 46 cores??
 ```

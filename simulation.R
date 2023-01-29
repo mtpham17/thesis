@@ -1,12 +1,3 @@
----
-  title: "simulation_scratchwork"
-output: pdf_document
-date: '2023-01-12'
----
-  
-   {r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = '/Users/thupham/Desktop/thesis')
 library(readstata13)
 library(tidyverse)
 library(glmnet)
@@ -20,13 +11,10 @@ library(future)
 library(furrr)
  
 
-
-   
 # cross validation helper function for the glmmLasso
 
 library(MASS)
 library(nlme)
-knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
 
 # https://rdrr.io/cran/glmmLasso/src/demo/glmmLasso-soccer.r
 cv_glmmLasso <- function(data, formula, rand=list(j=~1),
@@ -133,15 +121,11 @@ generate_beta <- function(type, p, s, default = 1) {
   return(c(rep(default, s), 0.5^seq(s + 1, p)))
 }
  
-
- {r rmse}
 rmse <- function(predicted, true) {
   return(sqrt(sum((predicted - true)^2) / length(predicted)))
 }
  
 
-
- {r sample_size}
 sample_size_gen <- function(n_bar, alpha, J) {
   n_min <- round(n_bar * (1 - alpha))
   n_max <- round(n_bar * (1 + alpha))
@@ -152,8 +136,6 @@ sample_size_gen <- function(n_bar, alpha, J) {
   return(sample_size)
 }
  
-
- {r generate_data, warnings=FALSE}
 
 ## DESCRIPTION OF INPUTS
 # type, p, s, default are all the arguments that are taken in by generate_beta
@@ -507,7 +489,7 @@ params <- params %>% mutate(
 )
 
 # sink("/n/home04/thupham17/thesis/results/output.txt")
-sink("/Users/thupham/Desktop/thesis/results/output.txt")
+# sink("/Users/thupham/Desktop/thesis/results/output.txt")
 
 tictoc::tic("10 iterations one set")
 
@@ -533,7 +515,7 @@ if (TRUE) {
 Sys.sleep(1)
 tictoc::toc()
 
-sink()
+# sink()
 # 10 iterations one set: 19.772 sec elapsed, with 6 cores?? 
 # 10 iterations one set: 20.74 sec elapsed, with 46 cores??
  

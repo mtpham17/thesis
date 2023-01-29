@@ -1,4 +1,4 @@
-install.packages("Require")
+install.packages("Require", repos="http://cran.r-project.org")
 library(Require)
 Require(readstata13)
 Require("readstata13")

@@ -1,20 +1,22 @@
-library(readstata13)
-library(tidyverse)
-library(glmnet)
-library(caret)
-library(fastDummies)
-library(mvtnorm)
-library(dplyr)
-library(glmnet)
-library(glmmLasso)
-library(future)
-library(furrr)
+install.packages('Require')
+library(Require)
+Require("readstata13")
+Require("tidyverse")
+Require("glmnet")
+Require("caret")
+Require("fastDummies")
+Require("mvtnorm")
+Require("dplyr")
+Require("glmnet")
+Require("glmmLasso")
+Require("future")
+Require("furrr")
+Require("MASS")
+Require("nlme")
+Require("caret")
  
 
 # cross validation helper function for the glmmLasso
-
-library(MASS)
-library(nlme)
 
 # https://rdrr.io/cran/glmmLasso/src/demo/glmmLasso-soccer.r
 cv_glmmLasso <- function(data, formula, rand=list(j=~1),
@@ -253,7 +255,6 @@ lambda_range <- function(data, p, baseline_min_lambda = 10^(-2), baseline_max_la
  
 
    
-library(caret)
 perf_metrics <- function(beta_hat, beta_true, y_hat, y_true, fixed) {
   
   y_rmse <- rmse(y_hat, y_true)
@@ -496,8 +497,8 @@ tictoc::tic("10 iterations one set")
 if (TRUE) {
   # Run in parallel
   
-  library(future)
-  library(furrr)
+  Require("future")
+  Require("furrr")
   
   plan(multisession, workers = parallel::detectCores() - 2 )
   
@@ -575,5 +576,7 @@ tictoc::toc()
 # 0 0 0
 
 #code
+
+#SALLOC -o ./logs/myoutput_%j.txt  
  
 

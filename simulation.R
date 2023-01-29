@@ -1,5 +1,7 @@
 install.packages("Require")
 library(Require)
+install.packages('readstata13')
+library(readstata13)
 Require("readstata13")
 Require("tidyverse")
 Require("glmnet")

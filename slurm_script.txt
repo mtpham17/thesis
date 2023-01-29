@@ -1,0 +1,9 @@
+#!/bin/bash
+#SALLOC -c 8                # Number of cores (-c)
+#SALLOC -t 0-08:00          # Runtime in D-HH:MM, minimum of 10 minutes
+#SALLOC -p serial_requeue   # Partition to submit to
+#SALLOC --mem=100           # Memory pool for all cores (see also --mem-per-cpu)
+module load R/4.1.0-fasrc01 #Load Perl module
+
+#R file to run, and txt files to produce for output and errors
+R CMD BATCH simulation.R logs/myoutput_%j.txt --no-save --no-restore

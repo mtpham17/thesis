@@ -1,9 +1,18 @@
 #!/bin/bash
-#SALLOC -c 8                # Number of cores (-c)
-#SALLOC -t 0-08:00          # Runtime in D-HH:MM, minimum of 10 minutes
-#SALLOC -p serial_requeue   # Partition to submit to
-#SALLOC --mem=100           # Memory pool for all cores (see also --mem-per-cpu)
-module load R/4.1.0-fasrc01 #Load Perl module
+#SBATCH -n 32                                            # Number of cores requested
+#SBATCH -N 1                                             # Ensure that all cores are on one machine
+#SBATCH -t 08:00                                           # Runtime in minutes
+#SBATCH -p stats                                                # Partition to submit to
+#SBATCH --mem-per-cpu=1000                         # Memory per cpu in MB
+#SBATCH --open-mode=append                      # Append to output file, don't truncate
+#SBATCH -o /logs/output_%j.txt # Standard out goes to this file
+#SBATCH -e /logs/output_%j.err # Standard err goes to this file
+#SBATCH --mail-type=ALL                         # Type of email notification- BEGIN,END,FAIL,ALL
+#SBATCH --mail-user=thupham@college.harvard.edu         # Email address
+
+# You might have some special loading of modules in the computing environment
+module load R/4.1.0-fasrc01
+export R_LIBS_USER=$HOME/apps/R_3.5.1:$R_LIBS_USER
 
 #R file to run, and txt files to produce for output and errors
-R CMD BATCH simulation.R logs/myoutput_%j.txt --no-save --no-restore
+R CMD BATCH simulation.R logs/R_output_%j.txt --no-save --no-restore

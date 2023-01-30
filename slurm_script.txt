@@ -9,7 +9,6 @@
 #SBATCH --mail-user=thupham@college.harvard.edu         # Email address
 
 # You might have some special loading of modules in the computing environment
-cd thesis
 module load R/4.1.0-fasrc01
 export R_LIBS_USER=$HOME/apps/R_4.1.0:$R_LIBS_USER
 

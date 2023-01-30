@@ -13,4 +13,4 @@ module load R/4.1.0-fasrc01
 export R_LIBS_USER=$HOME/apps/R_4.1.0:$R_LIBS_USER
 
 #R file to run, and txt files to produce for output and errors
-R CMD BATCH simulation_packages.R logs/R_packages_$j.txt --no-save --no-restore
+R CMD ALLOC simulation_packages.R logs/R_packages_$j.txt --no-save --no-restore

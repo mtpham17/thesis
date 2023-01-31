@@ -10,21 +10,64 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-setwd("C:/Users/michaelino/Desktop/append/data")
-for (data in list.files()){
+concat_files <- function(pathname) {
+  setwd(pathname)
+  for (data in list.files()){
   
   # Create the first data if no data exist yet
-  if (!exists("dataset")){
-    dataset <- read.csv(data, header=TRUE)
+    if (!exists("dataset")){
+      dataset <- read.csv(data, header=TRUE)
+    }
+    
+    # if data already exist, then append it together
+    if (exists("dataset")){
+      tempory <-read.csv(data, header=TRUE)
+      dataset <-unique(rbind(dataset, tempory))
+      rm(tempory)
+    }
   }
-  
-  # if data already exist, then append it together
-  if (exists("dataset")){
-    tempory <-read.csv(data, header=TRUE)
-    dataset <-unique(rbind(dataset, tempory))
-    rm(tempory)
-  }
+  return(dataset)
 }
-View(dataset)
+```
+
+
+```{r}
+# source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
+pathname <- "/Users/thupham/Desktop/thesis/results/013023_run"
+if (TRUE) {
+    # Run in parallel
+    
+    library(future)
+    library(furrr)
+  
+    plan(multisession, workers = parallel::detectCores() - 2 )
+    
+    dataset <- future_pmap(pathname, .f = concat_files,
+                          .options = furrr_options(seed = NULL),
+                          .progress = TRUE)
+    
+    plan(sequential)
+    
+} else {
+  # Run not in parallel, used for debugging
+  dataset <- pmap(pathname, .f = concat_files)
+}
+```
+```{r}
+write.csv(dataset[[1]], "/Users/thupham/Desktop/thesis/concat_results/013023_run.csv")
+```
+
+```{r}
+# now, take a look at dataset[[1]]
+library(dplyr)
+library(tidyverse)
+data <- dataset[[1]]
+collapsed_df <- data %>% 
+  group_by(type, p, scale) %>%
+  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)))
+```
+
+```{r}
+plot(collapsed_df$mean_adj_r_squared)
 ```
 

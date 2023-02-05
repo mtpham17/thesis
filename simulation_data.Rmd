@@ -3,6 +3,8 @@ title: "simulation_data"
 author: "Thu Pham"
 date: "2023-01-31"
 output: pdf_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -33,7 +35,7 @@ concat_files <- function(pathname) {
 
 ```{r}
 # source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
-pathname <- "/Users/thupham/Desktop/thesis/results/013023_run"
+pathname <- "/n/home04/thupham17/thesis/results/020323_run"
 if (TRUE) {
     # Run in parallel
     
@@ -54,7 +56,7 @@ if (TRUE) {
 }
 ```
 ```{r}
-write.csv(dataset[[1]], "/Users/thupham/Desktop/thesis/concat_results/013023_run.csv")
+write.csv(dataset[[1]], "/n/home04/thupham17/thesis/concat_results/020323_run.csv")
 ```
 
 ```{r}
@@ -62,6 +64,11 @@ write.csv(dataset[[1]], "/Users/thupham/Desktop/thesis/concat_results/013023_run
 library(dplyr)
 library(tidyverse)
 data <- dataset[[1]]
+data$mean_adj_r_squared
+```
+
+
+```{r}
 collapsed_df <- data %>% 
   group_by(type, p, scale) %>%
   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)))

@@ -2,6 +2,8 @@
 title: "simulation_scratchwork"
 output: pdf_document
 date: '2023-01-12'
+editor_options: 
+  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
@@ -443,7 +445,8 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, mean_noise, sigma_noise) 
   {
     # fname = paste0("/Users/thupham/Desktop/thesis/results/", chunkNo, "_", seed, ".csv")
-    fname = paste0("/n/home04/thupham17/thesis/results/", chunkNo, "_", seed, ".csv")
+    fname = paste0("/n/home04/thupham17/thesis/results/020223_run/", 
+               chunkNo, "_", seed, ".csv")
     res = NA
     if (!file.exists(fname)) {
         res <- safe_run_sim(chunkNo = chunkNo, seed = seed, reps = reps,
@@ -454,6 +457,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            sigma_noise = sigma_noise)
         res <- as.data.frame(t(res$result))
         write.csv(res, fname)
+        print(res)
     } else {
         res = read.csv(file = fname)
     }
@@ -465,18 +469,19 @@ file_saving_sim = function(chunkNo, seed, reps,
 options(warn=-1)
 
 R <- 1000
-M_CHUNK <- 20
+M_CHUNK <- 50
+
 
 params <- expand.grid(chunkNo = 1:M_CHUNK,
-                      n_bar = 50,
+                      n_bar = seq(20, 80, by = 20),
                       J = 5,
-                      alpha = 0.5,
+                      alpha = seq(0, 4, by = 1),
                       type = 1:5,
-                      p = seq(4, 12, by = 2),
+                      p = seq(8, 20, by = 4),
                       s = 4,
                       default = 1,
-                      cov_x = 0.5,
-                      scale = seq(0, 1, by = 0.2),
+                      cov_x = 0.25,
+                      scale = seq(0, 4, by = 1),
                       base_mean_x = 0,
                       sigma_x = 1,
                       mean_r = 0,
@@ -506,8 +511,11 @@ params <- params %>% mutate(
     seed = 17 + 1:n()
 )
 
-sink("/n/home04/thupham17/thesis/logs/output.txt")
+sink("/n/home04/thupham17/thesis/logs/output_020223.txt")
 # sink("/Users/thupham/Desktop/thesis/results/output.txt")
+
+print("VARYING SCALE AND TYPE")
+print(params)
 
 tictoc::tic("10 iterations one set")
 
@@ -517,7 +525,7 @@ if (TRUE) {
     library(future)
     library(furrr)
   
-    plan(multisession, workers = parallel::detectCores() - 2 )
+    plan(multisession, workers = parallel::detectCores() - 30)
     
     results <- future_pmap(params, .f = file_saving_sim,
                           .options = furrr_options(seed = NULL),
@@ -527,7 +535,7 @@ if (TRUE) {
     
 } else {
   # Run not in parallel, used for debugging
-  params$res <- pmap(params, .f = file_saving_sim )
+  params$res <- pmap(params, .f = file_saving_sim)
 }
 
 Sys.sleep(1)
@@ -538,6 +546,51 @@ sink()
 # 10 iterations one set: 20.74 sec elapsed, with 46 cores??
 ```
 
+```{r}
+concat_files <- function(pathname) {
+  setwd(pathname)
+  for (data in list.files()){
+  
+  # Create the first data if no data exist yet
+    if (!exists("dataset")){
+      dataset <- read.csv(data, header=TRUE)
+    }
+    
+    # if data already exist, then append it together
+    if (exists("dataset")){
+      tempory <-read.csv(data, header=TRUE)
+      dataset <-unique(rbind(dataset, tempory))
+      rm(tempory)
+    }
+  }
+  return(dataset)
+}
+```
+
+```{r}
+# source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
+pathname <- "/n/home04/thupham17/thesis/results/020223_run"
+if (TRUE) {
+    # Run in parallel
+    
+    library(future)
+    library(furrr)
+  
+    plan(multisession, workers = parallel::detectCores() - 2 )
+    
+    dataset <- future_pmap(pathname, .f = concat_files,
+                          .options = furrr_options(seed = NULL),
+                          .progress = TRUE)
+    
+    plan(sequential)
+    
+} else {
+  # Run not in parallel, used for debugging
+  dataset <- pmap(pathname, .f = concat_files)
+}
+
+write.csv(dataset[[1]], "/n/home04/thupham17/thesis/concat_results/020223_run.csv")
+```
 
 
 ```{r}

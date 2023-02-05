@@ -212,8 +212,8 @@ generate_data <- function(n_bar, J, alpha,
   return(data)
 }
 
-test_df <- generate_data(n_bar = 20, J = 3, alpha = 0.2,
-  type = 1, p = 5, s = 3, default = 1,
+test_df <- generate_data(n_bar = 50, J = 4, alpha = 0.8,
+  type = 1, p = 10, s = 3, default = 1,
   cov_x = 0.5, scale = 1, base_mean_x = 0, sigma_x = 1,
   mean_r = 0, sigma_r = 1,
   mean_noise = 0, sigma_noise = 1)
@@ -237,39 +237,24 @@ lambda_range <- function(data, p, baseline_min_lambda = 10^(-2), baseline_max_la
     lambdas <- seq(baseline_min_lambda, baseline_max_lambda, length = lambda_no)
     min_lambda <- baseline_min_lambda
     max_lambda <- baseline_max_lambda
+    coefs <- rep(NA, lambda_no)
     
-    for (l in lambdas) {
+    for (l in 1:length(lambdas)) {
       mixed_lasso <- glmmLasso(fix = as.formula(paste("Y ~", covariates)),
                            rnd=list(j=~1),
                            data = data,
-                           lambda = l,
+                           lambda = lambdas[l],
                            final.re = TRUE)
-        
-      if (sum(mixed_lasso$coefficients[2:(p + 1)] != 0) == p) {
-        min_lambda <- l
-        break
-      } 
-    }
-    
-    for (l in rev(lambdas)) {
       
-    mixed_lasso <- glmmLasso(fix = as.formula(paste("Y ~", covariates)),
-                 rnd=list(j=~1),
-                 data = data,
-                 lambda = l,
-                 final.re = TRUE)
-        
-      if (sum(mixed_lasso$coefficients[2:(p + 1)] != 0) == 0) {
-        max_lambda <- l
-        break
-      }
+      coefs[l] <- sum(mixed_lasso$coefficients[2:(p + 1)] != 0)
+                             
     }
-    
-    # print(min_lambda)
+    min_lambda <- lambdas[max(which(coefs == p))]
+    max_lambda <- lambdas[min(which(coefs == 0))]
     return(c(min_lambda, max_lambda))
-  
-  
 }
+
+lambda_range(test_df, 10)
 ```
 
 ```{r}

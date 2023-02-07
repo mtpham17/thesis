@@ -79,7 +79,6 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
   
   # find lambda which gives lowest prediction error
   pred_error_vec <- apply(pred_error, 1, sum)
-  # print(pred_error_vec)
   return(lambdas[which.min(pred_error_vec)])  
 }
 
@@ -237,7 +236,7 @@ lambda_range <- function(data, p, baseline_min_lambda = 10^(-2), baseline_max_la
     lambdas <- seq(baseline_min_lambda, baseline_max_lambda, length = lambda_no)
     min_lambda <- baseline_min_lambda
     max_lambda <- baseline_max_lambda
-    coefs <- rep(NA, lambda_no)
+    coefs <- rep(0, lambda_no)
     
     for (l in 1:length(lambdas)) {
       mixed_lasso <- glmmLasso(fix = as.formula(paste("Y ~", covariates)),
@@ -249,8 +248,12 @@ lambda_range <- function(data, p, baseline_min_lambda = 10^(-2), baseline_max_la
       coefs[l] <- sum(mixed_lasso$coefficients[2:(p + 1)] != 0)
                              
     }
-    min_lambda <- lambdas[max(which(coefs == p))]
-    max_lambda <- lambdas[min(which(coefs == 0))]
+    min_lambda <- ifelse(is.na(lambdas[max(which(coefs == p))]), 
+                         baseline_min_lambda,
+                         lambdas[max(which(coefs == p))])
+    max_lambda <- ifelse(is.na(lambdas[min(which(coefs == 0))]),
+                         baseline_max_lambda,
+                         lambdas[min(which(coefs == 0))])
     return(c(min_lambda, max_lambda))
 }
 
@@ -313,12 +316,10 @@ analyze <- function(data, p, true_beta) {
                                model_lasso_fixed$lambda.min)[2:(length(true_beta) + 1)]
   
   lambda_range <- lambda_range(data, p)
-  print(lambda_range)
   
   best_lambda <- cv_glmmLasso(data = data,
                              formula = as.formula(paste("Y ~", covariates)), 
                              lambda_min = lambda_range[1], lambda_max = lambda_range[2])
-  # print(best_lambda)
   model_lasso_mixed <- glmmLasso(fix = as.formula(paste("Y ~", covariates)),
                                  rnd=list(j=~1),
                                  data = data,

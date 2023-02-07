@@ -461,7 +461,7 @@ M_CHUNK <- 50
 params <- expand.grid(chunkNo = 1:M_CHUNK,
                       n_bar = seq(20, 80, by = 20),
                       J = 5,
-                      alpha = seq(0, 4, by = 1),
+                      alpha = seq(0, 1, by = 0.25),
                       type = 1:5,
                       p = seq(8, 20, by = 4),
                       s = 4,

@@ -35,7 +35,6 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
                       lambda_step=20, lambda_min = lambda_min,
                       lambda_max = lambda_max) {
   lambdas <- seq(lambda_min, lambda_max, length = lambda_step)
-  print(lambdas)
   
   N <- dim(data)[1]
   ind <- sample(N, N)
@@ -168,7 +167,7 @@ generate_data <- function(n_bar, J, alpha,
                           type, p, s, default,
                           cov_x, scale, base_mean_x = 0, sigma_x = 1, 
                           mean_r = 0, sigma_r, 
-                          mean_noise = 0, sigma_noise = 1) {
+                          snr, mean_noise = 0, sigma_noise = 1) {
   
   # generate sizes of each cluster 
   sample_size <- sample_size_gen(n_bar = n_bar, alpha = alpha, J = J)
@@ -206,6 +205,11 @@ generate_data <- function(n_bar, J, alpha,
   
   data$Y <- rowSums(sweep(x_all, 2, fixed_beta, "*")) + random_beta + epsilon
   
+  # 02/13/23: adding signal to noise for more insightful graphs
+  
+  k <- sqrt(var(data$Y)/(snr*var(epsilon)))
+  data$Y = data$Y + k*epsilon 
+  
   data$j <- as.factor(rep(1:J, times = sample_size))
   
   return(data)
@@ -215,6 +219,7 @@ test_df <- generate_data(n_bar = 50, J = 4, alpha = 0.8,
   type = 1, p = 10, s = 3, default = 1,
   cov_x = 0.5, scale = 1, base_mean_x = 0, sigma_x = 1,
   mean_r = 0, sigma_r = 1,
+  snr = 1,
   mean_noise = 0, sigma_noise = 1)
 
 ```
@@ -248,10 +253,10 @@ lambda_range <- function(data, p, baseline_min_lambda = 10^(-2), baseline_max_la
       coefs[l] <- sum(mixed_lasso$coefficients[2:(p + 1)] != 0)
                              
     }
-    min_lambda <- ifelse(is.na(lambdas[max(which(coefs == p))]), 
+    min_lambda <- ifelse(length(which(coefs == p)) == 0, 
                          baseline_min_lambda,
                          lambdas[max(which(coefs == p))])
-    max_lambda <- ifelse(is.na(lambdas[min(which(coefs == 0))]),
+    max_lambda <- ifelse(length(which(coefs == 0)) == 0,
                          baseline_max_lambda,
                          lambdas[min(which(coefs == 0))])
     return(c(min_lambda, max_lambda))
@@ -363,13 +368,15 @@ results <- analyze(test_df, 5, test_beta)
 one_run <- function(n_bar, J, alpha, 
                     type, p, s, default,
                     cov_x, scale, base_mean_x = 0, sigma_x = 1, 
-                    mean_r = 0, sigma_r, 
+                    mean_r = 0, sigma_r,
+                    snr,
                     mean_noise = 0, sigma_noise = 1) {
   
   data <- generate_data(n_bar, J, alpha, 
                     type, p, s, default,
                     cov_x, scale, base_mean_x = 0, sigma_x = 1, 
                     mean_r = 0, sigma_r, 
+                    snr,
                     mean_noise = 0, sigma_noise = 1)
   
   fixed_beta <- generate_beta(type, p, s, default)
@@ -386,7 +393,8 @@ rerun_single_params <- function(chunkNo, seed, reps,
                            n_bar, J, alpha,
                            type, p, s, default, cov_x,
                            scale, base_mean_x, sigma_x,
-                           mean_r, sigma_r, mean_noise, sigma_noise) {
+                           mean_r, sigma_r, 
+                           snr, mean_noise, sigma_noise) {
   print("starting an iteration")
   set.seed(seed)
   results <- rerun(reps, one_run(n_bar = n_bar, J = J,
@@ -397,6 +405,7 @@ rerun_single_params <- function(chunkNo, seed, reps,
                                        base_mean_x = base_mean_x,
                                        sigma_x = sigma_x,
                                        mean_r = mean_r, sigma_r = sigma_r,
+                                        snr = snr,
                                        mean_noise = mean_noise,
                                        sigma_noise = sigma_noise))
   
@@ -409,11 +418,11 @@ rerun_single_params <- function(chunkNo, seed, reps,
   
   row <- c(chunkNo, seed, reps, n_bar, J, alpha,
            type, p, s, default, cov_x, scale, base_mean_x, sigma_x,
-           mean_r, sigma_r, mean_noise, sigma_noise, mean_results, sd_results)
+           mean_r, sigma_r, snr, mean_noise, sigma_noise, mean_results, sd_results)
   
   names(row) <- c("chunkNo", "seed", "reps", "n_bar", "J", "alpha",
                   "type", "p", "s", "default", "cov_x", "scale", "base_mean_x", "sigma_x",
-                  "mean_r", "sigma_r", "mean_noise", "sigma_noise", 
+                  "mean_r", "sigma_r", "snr", "mean_noise", "sigma_noise", 
                   unname(sapply(names(results[[1]]), function(x) paste("mean_", x, sep = ""))),
                   unname(sapply(names(results[[1]]), function(x) paste("sd_", x, sep = ""))))
 
@@ -428,7 +437,8 @@ file_saving_sim = function(chunkNo, seed, reps,
                            n_bar, J, alpha,
                            type, p, s, default, cov_x,
                            scale, base_mean_x, sigma_x,
-                           mean_r, sigma_r, mean_noise, sigma_noise) 
+                           mean_r, sigma_r, snr,
+                           mean_noise, sigma_noise) 
   {
     # fname = paste0("/Users/thupham/Desktop/thesis/results/", chunkNo, "_", seed, ".csv")
     fname = paste0("/n/home04/thupham17/thesis/results/021323_run/", 
@@ -439,7 +449,8 @@ file_saving_sim = function(chunkNo, seed, reps,
                            n_bar = n_bar, J = J, alpha = alpha,
                            type = type, p = p, s = s, default = default, cov_x = cov_x,
                            scale = scale, base_mean_x = base_mean_x, sigma_x = sigma_x,
-                           mean_r = mean_r, sigma_r = sigma_r, mean_noise = mean_noise, 
+                           mean_r = mean_r, sigma_r = sigma_r, snr = snr, 
+                           mean_noise = mean_noise, 
                            sigma_noise = sigma_noise)
         res <- as.data.frame(t(res$result))
         write.csv(res, fname)
@@ -457,40 +468,43 @@ options(warn=-1)
 R <- 1000
 M_CHUNK <- 50
 
-
 params <- expand.grid(chunkNo = 1:M_CHUNK,
-                      n_bar = seq(20, 80, by = 20),
+                      n_bar = 50,
                       J = 5,
-                      alpha = seq(0, 1, by = 0.25),
+                      alpha = 0.5,
                       type = 1:5,
-                      p = seq(8, 20, by = 4),
+                      p = 12,
                       s = 4,
                       default = 1,
                       cov_x = 0.25,
-                      scale = seq(0, 4, by = 1),
+                      scale = 1,
                       base_mean_x = 0,
                       sigma_x = 1,
                       mean_r = 0,
                       sigma_r = 2,
+                      snr = seq(0, 1, by = 0.2),
                       mean_noise = 0,
                       sigma_noise = 1)
 
+# before snr:
+
 # params <- expand.grid(chunkNo = 1:M_CHUNK,
-#                       n_bar = 50,
+#                       n_bar = seq(20, 80, by = 20),
 #                       J = 5,
-#                       alpha = 0.5,
-#                       type = 1,
-#                       p = 20,
+#                       alpha = seq(0, 1, by = 0.25),
+#                       type = 1:5,
+#                       p = seq(8, 20, by = 4),
 #                       s = 4,
 #                       default = 1,
-#                       cov_x = 0,
-#                       scale = 1,
+#                       cov_x = 0.25,
+#                       scale = seq(0, 4, by = 1),
 #                       base_mean_x = 0,
 #                       sigma_x = 1,
 #                       mean_r = 0,
 #                       sigma_r = 2,
 #                       mean_noise = 0,
 #                       sigma_noise = 1)
+
 
 params <- params %>% mutate(
     reps = R / M_CHUNK,

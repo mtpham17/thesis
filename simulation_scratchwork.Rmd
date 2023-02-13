@@ -431,7 +431,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, mean_noise, sigma_noise) 
   {
     # fname = paste0("/Users/thupham/Desktop/thesis/results/", chunkNo, "_", seed, ".csv")
-    fname = paste0("/n/home04/thupham17/thesis/results/020223_run/", 
+    fname = paste0("/n/home04/thupham17/thesis/results/021323_run/", 
                chunkNo, "_", seed, ".csv")
     res = NA
     if (!file.exists(fname)) {
@@ -497,7 +497,7 @@ params <- params %>% mutate(
     seed = 17 + 1:n()
 )
 
-sink("/n/home04/thupham17/thesis/logs/output_020223.txt")
+sink("/n/home04/thupham17/thesis/logs/output_020723.txt")
 # sink("/Users/thupham/Desktop/thesis/results/output.txt")
 
 print("VARYING SCALE AND TYPE")
@@ -555,7 +555,7 @@ concat_files <- function(pathname) {
 
 ```{r}
 # source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
-pathname <- "/n/home04/thupham17/thesis/results/020223_run"
+pathname <- "/n/home04/thupham17/thesis/results/021323_run"
 if (TRUE) {
     # Run in parallel
     
@@ -575,7 +575,7 @@ if (TRUE) {
   dataset <- pmap(pathname, .f = concat_files)
 }
 
-write.csv(dataset[[1]], "/n/home04/thupham17/thesis/concat_results/020223_run.csv")
+write.csv(dataset[[1]], "/n/home04/thupham17/thesis/concat_results/021323_run.csv")
 ```
 
 

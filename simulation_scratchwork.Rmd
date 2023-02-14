@@ -212,6 +212,11 @@ generate_data <- function(n_bar, J, alpha,
   print(k)
   data$Y = data$Y + k*epsilon 
   
+  # 02/13/23: adding signal to noise for more insightful graphs
+  
+  k <- sqrt(var(data$Y)/(snr*var(epsilon)))
+  data$Y = data$Y + k*epsilon 
+  
   data$j <- as.factor(rep(1:J, times = sample_size))
   
   return(data)
@@ -484,7 +489,11 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       sigma_x = 1,
                       mean_r = 0,
                       sigma_r = 2,
+<<<<<<< HEAD
                       snr = seq(0.1, 1.1, by = 0.2),
+=======
+                      snr = seq(0, 1, by = 0.2),
+>>>>>>> 6036f61a742a720237205d0359e14670407f5060
                       mean_noise = 0,
                       sigma_noise = 1)
 
@@ -514,9 +523,13 @@ params <- params %>% mutate(
 )
 ```
 
+<<<<<<< HEAD
 
 ```{r}
 sink("/n/home04/thupham17/thesis/logs/output_021323.txt")
+=======
+sink("/n/home04/thupham17/thesis/logs/output_020723.txt")
+>>>>>>> 6036f61a742a720237205d0359e14670407f5060
 # sink("/Users/thupham/Desktop/thesis/results/output.txt")
 
 print("VARYING SCALE AND TYPE")

@@ -489,11 +489,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       sigma_x = 1,
                       mean_r = 0,
                       sigma_r = 2,
-<<<<<<< HEAD
                       snr = seq(0.1, 1.1, by = 0.2),
-=======
-                      snr = seq(0, 1, by = 0.2),
->>>>>>> 6036f61a742a720237205d0359e14670407f5060
                       mean_noise = 0,
                       sigma_noise = 1)
 

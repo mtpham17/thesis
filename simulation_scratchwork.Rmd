@@ -448,7 +448,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_noise, sigma_noise) 
   {
     # fname = paste0("/Users/thupham/Desktop/thesis/results/", chunkNo, "_", seed, ".csv")
-    fname = paste0("/n/home04/thupham17/thesis/results/021323_run/", 
+    fname = paste0("/n/home04/thupham17/thesis/results/thesis_timing_testrun_2/", 
                chunkNo, "_", seed, ".csv")
     res = NA
     if (!file.exists(fname)) {
@@ -472,14 +472,32 @@ file_saving_sim = function(chunkNo, seed, reps,
 ```{r}
 options(warn=-1)
 
-R <- 1000
-M_CHUNK <- 50
+R <- 50
+M_CHUNK <- 1
+
+# params <- expand.grid(chunkNo = 1:M_CHUNK,
+#                       n_bar = 50,
+#                       J = 5,
+#                       alpha = 0.5,
+#                       type = 1:5,
+#                       p = 12,
+#                       s = 4,
+#                       default = 1,
+#                       cov_x = 0.25,
+#                       scale = 1,
+#                       base_mean_x = 0,
+#                       sigma_x = 1,
+#                       mean_r = 0,
+#                       sigma_r = 2,
+#                       snr = seq(0.1, 1.1, by = 0.2),
+#                       mean_noise = 0,
+#                       sigma_noise = 1)
 
 params <- expand.grid(chunkNo = 1:M_CHUNK,
                       n_bar = 50,
                       J = 5,
                       alpha = 0.5,
-                      type = 1:5,
+                      type = 1,
                       p = 12,
                       s = 4,
                       default = 1,
@@ -489,7 +507,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       sigma_x = 1,
                       mean_r = 0,
                       sigma_r = 2,
-                      snr = seq(0.1, 1.1, by = 0.2),
+                      snr = 0.5,
                       mean_noise = 0,
                       sigma_noise = 1)
 
@@ -519,13 +537,9 @@ params <- params %>% mutate(
 )
 ```
 
-<<<<<<< HEAD
 
 ```{r}
-sink("/n/home04/thupham17/thesis/logs/output_021323.txt")
-=======
-sink("/n/home04/thupham17/thesis/logs/output_020723.txt")
->>>>>>> 6036f61a742a720237205d0359e14670407f5060
+sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
 # sink("/Users/thupham/Desktop/thesis/results/output.txt")
 
 print("VARYING SCALE AND TYPE")

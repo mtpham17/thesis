@@ -15,7 +15,7 @@ library(glmnet)
 library(caret)
 library(fastDummies)
 library(glmmLasso)
-knitr::opts_knit$set(root.dir = '/Users/thupham/Desktop/senior-yr/thesis/elsah-coptop')
+knitr::opts_knit$set(root.dir = '/Users/thupham/Desktop/thesis/Data/Source')
 # library(hrbrthemes)
 # library(ggthemes)
 # library(extrafont)
@@ -276,13 +276,24 @@ gain_ind <- which(startsWith(colnames(outcomes_and_obs_full_y1), "gain"))
 
 ```
 
+```{r}
+# filter out clusters that only have one observation
+outcomes_and_obs_full_y1_largec <-  outcomes_and_obs_full_y1 %>%
+    group_by(provid) %>%
+    filter(n() > 1) %>%
+    droplevels() %>%
+    ungroup
+```
+
+
 ```{r outcomes_corrplot, echo=TRUE, fig.height=8, cache=TRUE}
-res <- cor(outcomes_and_obs_full_y1[, gain_ind], use="complete.obs")
+res <- cor(outcomes_and_obs_full_y1_largec[, gain_ind],
+           use="complete.obs")
 # invert correlation matrix; the diagonal elements give us the correlation of that outcome to the rest of the outcomes: http://www2.tulane.edu/~PsycStat/dunlap/Psyc613/RI2.html#:~:text=The%20Inverted%20Correlation%20Matrix%20%2D%2D&text=When%20the%20measures%20are%20correlated,volume%20is%20less%20than%201.&text=Therefore%2C%20the%20diagonal%20elements%20allow,other%20variables%20in%20the%20set.
 
 inv <-solve(res)
 diag(inv)
-outcomes_use_y1 <- colnames(outcomes_and_obs_full_y1)[gain_ind][order(diag(inv))[1:3]]
+outcomes_use_y1 <- colnames(outcomes_and_obs_full_y1_largec)[gain_ind][order(diag(inv))[1:3]]
 
 # results: "gain_c_mefs_str" "gain_c_wjlw_str" "gain_c_wjap_str" --> 
 # MEFS Z-score, WJ Letter Word ID, WJ Applied Problems
@@ -294,7 +305,7 @@ outcomes_use_y1 <- colnames(outcomes_and_obs_full_y1)[gain_ind][order(diag(inv))
 
 
 ```{r}
-
+library(regclass)
 # now that we have the three outcomes we want to work with, quickly run linear regression and observe R^2 value
 
 outcomes <- colnames(outcomes_and_obs_full_y1[, gain_ind])
@@ -341,7 +352,7 @@ for (outcome in outcomes_use_y1) {
     select(-c(other_outcomes, cid))
   allSd <- apply(df_analysis[, -1], 2, sd)
   var.names <- colnames(df_analysis)[-c(1, which(colnames(df_analysis) == "provid"))]
-  var.names <- var.names[1:10]
+  # var.names <- var.names[1:10]
   formula <- as.formula(paste(outcome, "~", paste(var.names, collapse= " + ")))
   x = model.matrix(formula, data = df_analysis)
   
@@ -370,14 +381,9 @@ for (outcome in outcomes_use_y1) {
 ## THESE ARE THE COEFFICIENTS FOR Y1: coefficients_model_y1_use
 ```
 
-```{r}
-# filter out clusters that only have one observation
 
-outcomes_and_obs_full_y1_largec <-  outcomes_and_obs_full_y1 %>%
-    group_by(provid) %>%
-    filter(n() > 1) %>%
-    droplevels() %>%
-    ungroup
+```{r}
+# need to import lambda helper functions for glmmLasso, but maybe after you figure out which covariates are problematic and causing the Fisher matrix problem?
 ```
 
 
@@ -402,21 +408,31 @@ for (outcome in outcomes_use_y1) {
     filter(!is.na(outcomes_and_obs_full_y1_largec[[outcome]])) %>%
     # make sure to not use cid, because it's basically just the row number at this point
     select(-c(other_outcomes, caretype)) %>%
-    mutate_if(is.character, as.numeric) 
+    mutate_if(is.character, as.numeric) %>%
+    mutate_at(vars(provid), factor) %>%
+    select(-c("classid", "cid", "nsweeps.y")) %>%
+    select(-ends_with("NA")) 
+    # select(-starts_with(c("c_m8", "m_8")))
     # caretype, actualtype, classid,
     #           nsweeps.y, nadult, nclass, nsweeps.x)) %>%
     # select(-starts_with(c("c_m8", "m8", "o_c_verbal", "o_c_focus", "o_t_task"))) %>%
   
+  var.names <- colnames(df_analysis)[-(which(colnames(df_analysis) 
+                                             %in% c("provid", outcome,
+                                                    "nsweeps.x")))]
+  # var.names.abbrev <- var.names[1:17]
+  # seems like the combination of var.names[18] with the previous 17
+  # variables does not work well -- maybe they are too correlated?
   
-  var.names <- colnames(df_analysis)[-c(1, which(colnames(df_analysis) == "provid"))]
-  var.names <- var.names[1:10]
-  print(var.names)
-  formula <- as.formula(paste(outcome, "~", paste(var.names, collapse= " + ")))
+  # for first outcome (may change, but that's currently # "gain_c_mefs_str")
+  ## 1:17 works, but 1:18 does not
+  ## 18:28 works, but 18:29 does not
+  var.names.abbrev <- var.names[18:29]
+  formula <- as.formula(paste(outcome, "~", paste(var.names.abbrev, collapse= " + ")))
   # placeholder lambda value
-  # I AM GETTING NA VALUES BECAUSE THERE ARE SOME CLUSTERS THAT ONLY HAVE
-  # ONE OBSERVATION
+  # maybe lambda value is the issue?
   print(summary(glmmLasso(formula, rnd=list(provid=~1), data=df_analysis, 
-                          lambda = 1))) 
+                          lambda = 0.1, final.re = TRUE))) 
   break
   # models_y1_use[[name]] <- model_lasso
   # cc_y1_use = coef(model_lasso, s = model_lasso$lambda.min)
@@ -430,10 +446,6 @@ for (outcome in outcomes_use_y1) {
   # print(cc)
 
 }
-
-```
-
-```{r}
 
 ```
 

@@ -204,12 +204,10 @@ generate_data <- function(n_bar, J, alpha,
   # add the noise into the covariates so that we preserve the structure from earlier.
   
   data$Y <- rowSums(sweep(x_all, 2, fixed_beta, "*")) + random_beta + epsilon
-  print(data$Y)
   
   # 02/13/23: adding signal to noise for more insightful graphs
   
   k <- sqrt(var(data$Y)/(snr*var(epsilon)))
-  print(k)
   data$Y = data$Y + k*epsilon 
   
   # 02/13/23: adding signal to noise for more insightful graphs
@@ -402,7 +400,6 @@ rerun_single_params <- function(chunkNo, seed, reps,
                            scale, base_mean_x, sigma_x,
                            mean_r, sigma_r, 
                            snr, mean_noise, sigma_noise) {
-  print("starting an iteration")
   set.seed(seed)
   results <- rerun(reps, one_run(n_bar = n_bar, J = J,
                                        alpha = alpha,
@@ -461,7 +458,6 @@ file_saving_sim = function(chunkNo, seed, reps,
                            sigma_noise = sigma_noise)
         res <- as.data.frame(t(res$result))
         write.csv(res, fname)
-        print(res)
     } else {
         res = read.csv(file = fname)
     }
@@ -541,9 +537,6 @@ params <- params %>% mutate(
 ```{r}
 sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
 # sink("/Users/thupham/Desktop/thesis/results/output.txt")
-
-print("VARYING SCALE AND TYPE")
-print(params)
 
 tictoc::tic("10 iterations one set")
 

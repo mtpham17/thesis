@@ -336,14 +336,14 @@ analyze <- function(data, p, true_beta) {
                                model_lasso_fixed$lambda.min)[2:(length(true_beta) + 1)]
   
   lambda_range <- quiet_lambda_range(data, p)
-  errors_lambda_range <- sum(unlist(lapply(errors_lambda_range[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
+  errors_lambda_range <- sum(unlist(lapply(lambda_range[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
   lambda_range <- lambda_range$result
   
-  best_lambda <- quiet_best_lambda(data = data,
+  best_lambda <- quiet_cv_glmmLasso(data = data,
                              formula = as.formula(paste("Y ~", covariates)), 
                              lambda_min = lambda_range[1], lambda_max = 
                                lambda_range[2])
-  errors_best_lambda <- sum(unlist(lapply(errors_best_lambda[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
+  errors_best_lambda <- sum(unlist(lapply(best_lambda[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
   best_lambda <- best_lambda$result
   
   model_lasso_mixed <- quiet_mixed_lasso(fix = as.formula(paste("Y ~", covariates)),
@@ -351,7 +351,7 @@ analyze <- function(data, p, true_beta) {
                                          data = data,
                                          lambda=best_lambda,
                                          final.re = TRUE)
-  errors_model_lasso_mixed <- sum(unlist(lapply(errors_model_lasso_mixed[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
+  errors_model_lasso_mixed <- sum(unlist(lapply(model_lasso_mixed[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
   model_lasso_mixed <- model_lasso_mixed$result
   
   coefficients_mixed <- model_lasso_mixed$coefficients[2:(length(true_beta) + 1)]
@@ -376,16 +376,15 @@ analyze <- function(data, p, true_beta) {
                  "errors_best_lambda" = errors_best_lambda,
                  "errors_mixed_lasso" = errors_model_lasso_mixed)
   
-  # comment
-  
   return(c(list("adj_r_squared" = summary(basic_linear)$adj.r.squared, "agreement" = agreement), 
-           fixed_results, mixed_results))
+           fixed_results, mixed_results, errors))
 }
 
 test_beta <- generate_beta(1, 10, 3)
-results <- analyze(test_df, 5, test_beta)
+results <- analyze(test_df, 10, test_beta)
 
 ```
+
 
 
 ```{r}
@@ -423,7 +422,7 @@ rerun_single_params <- function(chunkNo, seed, reps,
                            mean_r, sigma_r, 
                            snr, mean_noise, sigma_noise) {
   set.seed(seed)
-  results <- rerun(reps, one_run(n_bar = n_bar, J = J,
+results <- map(1:reps, ~ one_run(n_bar = n_bar, J = J,
                                        alpha = alpha,
                                        type = type, p = p,
                                        s = s, default = default,
@@ -467,7 +466,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_noise, sigma_noise) 
   {
     # fname = paste0("/Users/thupham/Desktop/thesis/results/", chunkNo, "_", seed, ".csv")
-    fname = paste0("/n/home04/thupham17/thesis/results/thesis_timing_testrun_2/", 
+    fname = paste0("/n/home04/thupham17/thesis/results/thesis_timing_testrun_2/",
                chunkNo, "_", seed, ".csv")
     res = NA
     if (!file.exists(fname)) {
@@ -490,8 +489,8 @@ file_saving_sim = function(chunkNo, seed, reps,
 ```{r}
 options(warn=-1)
 
-R <- 50
-M_CHUNK <- 1
+R <- 6
+M_CHUNK <- 3
 
 # params <- expand.grid(chunkNo = 1:M_CHUNK,
 #                       n_bar = 50,
@@ -557,8 +556,8 @@ params <- params %>% mutate(
 
 
 ```{r}
-sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
-# sink("/Users/thupham/Desktop/thesis/results/output.txt")
+# sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
+sink("/Users/thupham/Desktop/thesis/logs/output_test.txt")
 
 tictoc::tic(paste(R, "iterations one set"))
 
@@ -612,6 +611,7 @@ concat_files <- function(pathname) {
 ```{r}
 # source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
 pathname <- "/n/home04/thupham17/thesis/results/021323_run"
+# pathname <- "/Users/thupham/Desktop/thesis/results"
 if (TRUE) {
     # Run in parallel
     

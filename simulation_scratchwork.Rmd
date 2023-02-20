@@ -170,6 +170,13 @@ generate_data <- function(n_bar, J, alpha,
                           mean_r = 0, sigma_r, 
                           snr, mean_noise = 0, sigma_noise = 1) {
   
+  stopifnot(J >= 2)
+  stopifnot(alpha < 1)
+  stopifnot(type %in% 1:5)
+  stopifnot(p > 1)
+  stopifnot(s > 1)
+  stopifnot(snr > 0)
+  
   # generate sizes of each cluster 
   sample_size <- sample_size_gen(n_bar = n_bar, alpha = alpha, J = J)
   n <- sum(sample_size)

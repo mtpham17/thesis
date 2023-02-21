@@ -261,6 +261,15 @@ outcomes_and_obs_full_y1 <- outcomes_and_obs_full_y1 %>%
   rename_at(vars(everything()), ~str_replace_all(., "\\)", "")) %>%
   rename_at(vars(everything()), ~str_replace_all(., "-|:|/", "."))
 ```
+Notes for simulation: 
+- There are 294 total columns in `outcomes_and_obs_full_y1'. 
+- There are 8 gain variables.
+- There are "magic 8" goals, but I don't think there are actually 8 of them? There are currently 5 of the "m8," and 5 of the "c_m8" (class averages or sums?)
+- For the child, there are 34 `o_c' variables. 
+- For the teacher, there are 33 `o_t' variables. Obviously, both of these categorical variables will expand by a lot when we use dummy variables and compute the class means and standard deviations.
+- We are going to choose one gain variable to work with, the one that has the most total correlation (so most "representative?") -- should also try to maybe do some PCA? There can be two separate analyses with these methods.
+
+
 
 ```{r}
 gain_ind <- which(startsWith(colnames(outcomes_and_obs_full_y1), "gain"))

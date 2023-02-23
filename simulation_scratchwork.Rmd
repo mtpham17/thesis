@@ -97,7 +97,9 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
 # beta-type 2: \beta has its first s components equal to 1, and the rest equal to 0
 # beta-type 3: \beta has its first s components, taking nonzero values equally spaced between 10 and 0.5, and the rest equal to 0
 # added back in beta-type 4 (the Ryan paper excluded it because they got similar results, but I'm running a slightly different simulation): \beta has its first s components, taking nonzero values equally spaced between -10 and 10, and the rest equal to 0 
-# beta-type 5: \beta has its first s components equal to 1, and the rest decaying exponentially to 0, specifically \beta_i = 0.5^{i - s}, for i = s + 1, ..., p
+# beta-type 5: \beta has its first s components equal to default, and the rest decaying exponentially to 0, specifically \beta_i = default * 0.5^{i - s}, for i = s + 1, ..., p
+
+## CHANGED THIS TO DEFAULT AND DEFAULT * 0.5 ON 2/23
 
 generate_beta <- function(type, p, s, default = 1) {
   if (s > p) {

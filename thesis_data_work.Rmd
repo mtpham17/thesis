@@ -15,7 +15,7 @@ library(glmnet)
 library(caret)
 library(fastDummies)
 library(glmmLasso)
-knitr::opts_knit$set(root.dir = '/Users/thupham/Desktop/thesis/Data/Source')
+knitr::opts_knit$set(root.dir = '/Users/thupham/Desktop/senior-yr/thesis/elsah-coptop')
 # library(hrbrthemes)
 # library(ggthemes)
 # library(extrafont)
@@ -395,6 +395,15 @@ for (outcome in outcomes_use_y1) {
 # need to import lambda helper functions for glmmLasso, but maybe after you figure out which covariates are problematic and causing the Fisher matrix problem?
 ```
 
+```{r}
+# basic linear model (to get an idea of what to generate in simulation)
+outcomes_and_obs_full_y1_largec_lm <- outcomes_and_obs_full_y1_largec %>%
+  select(-c(caretype, actualtype, nsweeps.y, cid, classid, provid))
+
+summary(lm(as.formula(paste(outcomes_use_y1, "~ .")), 
+   data = outcomes_and_obs_full_y1_largec_lm))
+```
+
 
 ```{r}
 # need to perform cross validation for both regular and glmmLasso
@@ -435,7 +444,8 @@ for (outcome in outcomes_use_y1) {
   
   # for first outcome (may change, but that's currently # "gain_c_mefs_str")
   ## 1:17 works, but 1:18 does not
-  ## 18:28 works, but 18:29 does not
+  ## 18:28 works, but 18:29 does 
+  
   var.names.abbrev <- var.names[18:29]
   formula <- as.formula(paste(outcome, "~", paste(var.names.abbrev, collapse= " + ")))
   # placeholder lambda value

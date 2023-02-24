@@ -93,11 +93,12 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
 # s = number of beta's that follow the setup given in the paper
 # default = value that the s components take on
 
+# note 2/24: types 2, 3, 4 actually correspond to types 3, 4, and 5 in the Tibshirani paper.
+
 # beta-type 1: \beta's have s components equal to (default), occurring at (roughly) equal spaced indices between 1 and p, and the rest equal to 0
-# beta-type 2: \beta has its first s components equal to 1, and the rest equal to 0
-# beta-type 3: \beta has its first s components, taking nonzero values equally spaced between 10 and 0.5, and the rest equal to 0
-# added back in beta-type 4 (the Ryan paper excluded it because they got similar results, but I'm running a slightly different simulation): \beta has its first s components, taking nonzero values equally spaced between -10 and 10, and the rest equal to 0 
-# beta-type 5: \beta has its first s components equal to default, and the rest decaying exponentially to 0, specifically \beta_i = default * 0.5^{i - s}, for i = s + 1, ..., p
+# beta-type 2: \beta has its first s components, taking nonzero values equally spaced between 10 and 0.5, and the rest equal to 0
+# added back in beta-type 3 (the Ryan paper excluded it because they got similar results, but I'm running a slightly different simulation): \beta has its first s components, taking nonzero values equally spaced between -10 and 10, and the rest equal to 0 
+# beta-type 4: \beta has its first s components equal to default, and the rest decaying exponentially to 0, specifically \beta_i = (default * 0.5)^{i - s}, for i = s + 1, ..., p
 
 ## CHANGED THIS TO DEFAULT AND DEFAULT * 0.5 ON 2/23
 
@@ -115,25 +116,23 @@ generate_beta <- function(type, p, s, default = 1) {
   }
   
   if (type == 2) {
-    return(c(rep(default, s), rep(0, p - s)))
-  }
-  
-  if (type == 3) {
     return(c(seq(-10, 0.5, length.out = s), 
              rep(0, p - s)))
   }
   
-  if (type == 4) {
+  if (type == 3) {
     return(c(seq(-10, 10, length.out = s), 
              rep(0, p - s)))
 
   }
   
+  # we add this condition because seq(n, n) gives us one number (instead of an empty
+  # list), and we don't want an extra coefficient
   if (p == s) {
     return(c(rep(default, s)))
   }
   
-  return(c(rep(default, s), 0.5^seq(s + 1, p)))
+  return(c(rep(default, s), (default * 0.5)^seq(s + 1, p)))
 }
 ```
 
@@ -653,7 +652,7 @@ write.csv(dataset[[1]], "/n/home04/thupham17/thesis/concat_results/021323_run.cs
 #                                         J_vec = seq(from = 2, to = 10, by = 2), 
 #                                         alpha_vec = seq(from = 0, to = 1, 
 #                                                         by = 0.25),
-#                                         type_vec = 1:5,
+#                                         type_vec = 1:4,
 #                                         p_vec = seq(from = 2, to = 20, by = 6), 
 #                                         s_vec = seq(from = 1, to = 20, by = 6), 
 #                                         default_vec = 1,

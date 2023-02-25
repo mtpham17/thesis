@@ -404,6 +404,49 @@ summary(lm(as.formula(paste(outcomes_use_y1, "~ .")),
    data = outcomes_and_obs_full_y1_largec_lm))
 ```
 
+WORKING WITH FULL DATA SET FIRST
+
+```{r}
+## trying suggestion of using LASSO with very low regularization parameter
+
+outcome <- outcomes_use_y1[1]
+other_outcomes <- outcomes[outcomes != outcome]
+df_analysis <- outcomes_and_obs_full_y1_largec %>%
+    filter(!is.na(outcomes_and_obs_full_y1_largec[[name]])) %>%
+    dplyr::select(-c(other_outcomes, caretype, classid, cid, nsweeps.y,
+                    actualtype, nsweeps.x)) 
+
+# df_analysis <- df_analysis[colSums(is.na(df_analysis) | df_analysis == 0) 
+#                            != nrow(df_analysis)]
+
+df_analysis <- as.data.frame(df_analysis)
+
+options(na.action="na.pass")
+x = model.matrix(as.formula(paste(outcome, "~ . -provid")), data = df_analysis)
+
+y = df_analysis[[name]]
+x = x[, -1]
+
+
+# call cv.glmnet()
+model_lasso <- glmnet(x = x, y = y, lambda = 0.1)
+coefs_for_glm <- coef(model_lasso)
+coefs_for_glm <- names(coefs_for_glm[coefs_for_glm[, 1] != 0, 1][-1])
+
+cfg.abbrev <- coefs_for_glm[1:27]
+
+
+## now run these on glmmLasso:
+
+# 28th variable, "o_c_typetask_TimeOut_TO" seems to be an issue..
+# at first, thought this was an issue with the column being all zeros (but it's actually not...) so I'm still not sure what the issue is :(
+
+formula <- as.formula(paste(outcome, "~", paste(cfg.abbrev, collapse= " + ")))
+print(summary(glmmLasso(formula, rnd=list(provid=~1), data=df_analysis, 
+                        lambda = 0.1, final.re = TRUE))) 
+
+```
+
 
 ```{r}
 # need to perform cross validation for both regular and glmmLasso

@@ -400,11 +400,144 @@ for (outcome in outcomes_use_y1) {
 outcomes_and_obs_full_y1_largec_lm <- outcomes_and_obs_full_y1_largec %>%
   select(-c(caretype, actualtype, nsweeps.y, cid, classid, provid))
 
-summary(lm(as.formula(paste(outcomes_use_y1, "~ .")), 
-   data = outcomes_and_obs_full_y1_largec_lm))
+# summary(lm(as.formula(paste(outcomes_use_y1, "~ .")), 
+#    data = outcomes_and_obs_full_y1_largec_lm))
 ```
 
-WORKING WITH FULL DATA SET FIRST
+## importing cross validation LASSO from other doc
+
+```{r}
+lambda_step <- 20
+lambdas <- seq(lambda_range_1[1], lambda_range_1[2], length = lambda_step)
+  
+N <- nrow(df_analysis)
+ind <- sample(N, N)
+
+# number of folds
+
+kk <- 5
+nk <- floor(N/kk)
+
+pred_error <- matrix(NA, ncol=kk, nrow = lambda_step)
+
+for (j in 1:lambda_step) {
+  for (i in 1:kk)
+  {
+    if (i < kk) {
+    indi <- ind[(i-1)*nk+(1:nk)]
+    }
+    else {
+    indi <- ind[((i-1)*nk+1):N]
+    }
+
+  data_train <- df_analysis[-indi,]
+  data_test <- df_analysis[indi, ]
+  glmmLasso(fix = formula, rnd = list(provid=~1),
+            data = data_train, lambda = lambdas[j])
+  }
+}
+```
+
+
+```{r}
+
+# trying to figure out this problematic data set ... 
+data_train %>% dplyr::select(starts_with(c("o_c_focus"))) %>%
+  dplyr::select(-ends_with(c("classmean", "classsd")))
+```
+
+
+```{r}
+cv_glmmLasso <- function(data, formula, rand=list(j=~1),
+                      lambda_step=20, lambda_min = lambda_min,
+                      lambda_max = lambda_max) {
+  lambdas <- seq(lambda_min, lambda_max, length = lambda_step)
+  
+  N <- nrow(data)
+  ind <- sample(N, N)
+  
+  # number of folds
+  
+  kk <- 5
+  nk <- floor(N/kk)
+  
+  pred_error <- matrix(NA, ncol=kk, nrow = lambda_step)
+
+  
+  for (j in 1:lambda_step) {
+    for (i in 1:kk)
+    {
+      if (i < kk) {
+      indi <- ind[(i-1)*nk+(1:nk)]
+      }
+      else {
+      indi <- ind[((i-1)*nk+1):N]
+      }
+  
+    data_train <- data[-indi,]
+    data_test <- data[indi,]
+  
+    glm <- try(glmmLasso(fix = formula, rnd = rand, data = data_train, 
+              lambda = lambdas[j]), silent = TRUE) 
+    
+    return()
+    
+    print(j)
+            
+        # if(!inherits(glm, "try-error"))
+        # {  
+        #   y_hat <- predict(glm, data_test)  
+        #   pred_error[j,i]<- sqrt(sum((data_test$Y - y_hat)^2) / nrow(data_test))
+        # }
+        # 
+        # else 
+        # {
+        #   return("error in choosing lambda value")
+        # }
+    }
+  }
+  
+  # find lambda which gives lowest prediction error
+  pred_error_vec <- apply(pred_error, 1, sum)
+  return(lambdas[which.min(pred_error_vec)])  
+}
+
+## other suggestion (haven't implemented this): run a simulation with a lot of lambdas, get a range of lambdas that we consistently see across these simulations. restrict the range based on those results
+```
+
+
+
+```{r}
+lambda_range <- function(data, formula, p,
+                         baseline_min_lambda = 10^(-2), baseline_max_lambda = 10^3,
+                         lambda_no = 20) {
+    
+    lambdas <- seq(baseline_min_lambda, baseline_max_lambda, length = lambda_no)
+    min_lambda <- baseline_min_lambda
+    max_lambda <- baseline_max_lambda
+    coefs <- rep(0, lambda_no)
+    
+    for (l in 1:length(lambdas)) {
+      mixed_lasso <- glmmLasso(fix = formula,
+                           rnd=list(provid=~1),
+                           data = data,
+                           lambda = lambdas[l],
+                           final.re = TRUE)
+      
+      coefs[l] <- sum(mixed_lasso$coefficients[2:(p + 1)] != 0)
+                             
+    }
+    
+    min_lambda <- ifelse(length(which(coefs == p)) == 0, 
+                         baseline_min_lambda,
+                         lambdas[max(which(coefs == p))])
+    max_lambda <- ifelse(length(which(coefs == 0)) == 0,
+                         baseline_max_lambda,
+                         lambdas[min(which(coefs == 0))])
+    return(c(min_lambda, max_lambda))
+}
+```
+
 
 ```{r}
 ## trying suggestion of using LASSO with very low regularization parameter
@@ -412,9 +545,11 @@ WORKING WITH FULL DATA SET FIRST
 outcome <- outcomes_use_y1[1]
 other_outcomes <- outcomes[outcomes != outcome]
 df_analysis <- outcomes_and_obs_full_y1_largec %>%
-    filter(!is.na(outcomes_and_obs_full_y1_largec[[name]])) %>%
-    dplyr::select(-c(other_outcomes, caretype, classid, cid, nsweeps.y,
-                    actualtype, nsweeps.x)) 
+  filter(!is.na(outcomes_and_obs_full_y1_largec[[name]])) %>%
+  dplyr::select(-c(other_outcomes, caretype, classid, cid, nsweeps.y,
+                   actualtype, nsweeps.x)) %>%
+  # dropping column that ends with NA so we avoid the "full rank" problem
+  dplyr::select(-ends_with(c("NA")))
 
 # df_analysis <- df_analysis[colSums(is.na(df_analysis) | df_analysis == 0) 
 #                            != nrow(df_analysis)]
@@ -433,6 +568,57 @@ model_lasso <- glmnet(x = x, y = y, lambda = 0.1)
 coefs_for_glm <- coef(model_lasso)
 coefs_for_glm <- names(coefs_for_glm[coefs_for_glm[, 1] != 0, 1][-1])
 
+cfg.abbrev <- coefs_for_glm[c(1:27, 29:length(coefs_for_glm))]
+## now run these on glmmLasso:
+
+# 28th variable, "o_c_typetask_TimeOut_TO" seems to be an issue..
+# at first, thought this was an issue with the column being all zeros (but it's actually not...) so I'm still not sure what the issue is :(
+
+
+formula <- as.formula(paste(outcome, "~", paste(cfg.abbrev, collapse= " + ")))
+lambda_range_1 <- lambda_range(df_analysis, formula, length(cfg.abbrev))
+```
+
+
+```{r}
+mixed_lasso_1 <- cv_glmmLasso(data = df_analysis, formula, 
+                              rand=list(provid=~1),
+                              lambda_min = lambda_range_1[1], 
+                              lambda_max = lambda_range_1[2]) 
+
+coefs_glm_1 <- mixed_lasso_1$coefficients[2:(length(cfg.abbrev) + 1)]
+predictive_coefs_glm_1 <- sum(mixed_lasso_1$coefficients[2:(length(cfg.abbrev) + 1)] 
+                              != 0)
+
+```
+
+
+## Trying to work through problematic variables
+
+```{r}
+## trying suggestion of using LASSO with very low regularization parameter, trying a lower regularization parameter
+df_analysis <- outcomes_and_obs_full_y1_largec %>%
+    filter(!is.na(outcomes_and_obs_full_y1_largec[[name]])) %>%
+    dplyr::select(-c(other_outcomes, caretype, classid, cid, nsweeps.y,
+                    actualtype, nsweeps.x)) 
+
+# df_analysis <- df_analysis[colSums(is.na(df_analysis) | df_analysis == 0) 
+#                            != nrow(df_analysis)]
+
+df_analysis <- as.data.frame(df_analysis)
+
+options(na.action="na.pass")
+x = model.matrix(as.formula(paste(outcome, "~ . -provid")), data = df_analysis)
+
+y = df_analysis[[name]]
+x = x[, -1]
+
+
+# call cv.glmnet()
+model_lasso <- glmnet(x = x, y = y, lambda = 0.01)
+coefs_for_glm <- coef(model_lasso)
+coefs_for_glm <- names(coefs_for_glm[coefs_for_glm[, 1] != 0, 1][-1])
+
 cfg.abbrev <- coefs_for_glm[1:27]
 
 
@@ -441,10 +627,14 @@ cfg.abbrev <- coefs_for_glm[1:27]
 # 28th variable, "o_c_typetask_TimeOut_TO" seems to be an issue..
 # at first, thought this was an issue with the column being all zeros (but it's actually not...) so I'm still not sure what the issue is :(
 
-formula <- as.formula(paste(outcome, "~", paste(cfg.abbrev, collapse= " + ")))
-print(summary(glmmLasso(formula, rnd=list(provid=~1), data=df_analysis, 
-                        lambda = 0.1, final.re = TRUE))) 
 
+formula <- as.formula(paste(outcome, "~", paste(cfg.abbrev, collapse= " + ")))
+mixed_lasso_2 <- glmmLasso(formula, rnd=list(provid=~1), data=df_analysis, 
+                        lambda = 0.1, final.re = TRUE) 
+
+coefs_glm_2 <- mixed_lasso_2$coefficients[2:(length(cfg.abbrev) + 1)]
+predictive_coefs_glm_2 <- sum(mixed_lasso_2$coefficients[2:(length(cfg.abbrev) + 1)] 
+                              != 0)
 ```
 
 

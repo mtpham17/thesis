@@ -489,14 +489,11 @@ other_outcomes <- outcomes[outcomes != outcome]
 
 df_analysis_noncor <- outcomes_and_obs_full_y1_largec %>%
   filter(!is.na(outcomes_and_obs_full_y1_largec[[outcome]])) %>%
-  dplyr::select(-c(all_of(other_outcomes), caretype, classid, cid, nsweeps.y,
+  dplyr::select(-c(all_of(other_outcomes), caretype, classid, 
+                   cid, nsweeps.y,
                    actualtype, nsweeps.x)) 
 
-df_analysis <- as.data.frame(df_analysis_noncor)
-
-# cor_matrix <- rcorr(as.matrix(select_if(df_analysis[coefs_for_glm], is.numeric)))
-# cor_df <- flattenCorrMatrix(cor_matrix$r, cor_matrix$P)
-# cor_help <- cor_df[cor_df$row == coefs_for_glm[111], ]
+df_analysis_noncor <- as.data.frame(df_analysis_noncor)
 ```
 
 
@@ -523,22 +520,24 @@ model_lasso <- glmnet(x = x, y = y, lambda = 0.1)
 coefs_for_glm <- coef(model_lasso)
 coefs_for_glm <- names(coefs_for_glm[coefs_for_glm[, 1] != 0, 1][-1])
 
-formula <- as.formula(paste(outcome, "~", paste(cfg.abbrev, 
+formula <- as.formula(paste(outcome, "~", paste(coefs_for_glm, 
                                                 collapse = " + ")))
 
-lambda_range_1 <- lambda_range(df_analysis, formula,
-                               length(coefs_for_glm))
+lambdas <- seq(0.01, 500, length = 20)
+predictive_coefs_1 <- list()
+num_coefs_1 <- list()
 
-glmmLasso(fix = formula, rnd = list(provid=~1), lambda = 5)
-
-# mixed_lasso_1 <- cv_glmmLasso(data = df_analysis, formula, 
-#                               rand=list(provid=~1),
-#                               lambda_min = lambda_range_1[1], 
-#                               lambda_max = lambda_range_1[2]) 
-# 
-# coefs_glm_1 <- mixed_lasso_1$coefficients[2:(length(cfg.abbrev) + 1)]
-# predictive_coefs_glm_1 <- sum(mixed_lasso_1$coefficients[2:(length(cfg.abbrev) + 1)] 
-#                               != 0)
+for (i in 1:length(lambdas)) {
+  mixed_lasso <- glmmLasso(data = df_analysis,
+                           fix = formula, 
+                           rnd = list(provid=~1),
+                           lambda = lambdas[i])
+  predictive_coefs_1[[i]] <- 
+    mixed_lasso$coefficients[2:(length(cfg.abbrev) + 1)]
+  num_coefs_1[[i]] <-
+    sum(mixed_lasso$coefficients[2:(length(cfg.abbrev) + 1)] != 0)
+  
+}
 
 ```
 

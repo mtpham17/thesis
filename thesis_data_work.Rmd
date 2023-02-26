@@ -413,8 +413,11 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
     data_train <- data[-indi,]
     data_test <- data[indi,]
   
-    glm <- try(glmmLasso(fix = formula, rnd = rand, data = data_train, 
-              lambda = lambdas[j]), silent = TRUE) 
+    glm <- glmmLasso(fix = formula, rnd = rand, data = data_train, 
+              lambda = lambdas[j]) 
+    
+    # glm <- try(glmmLasso(fix = formula, rnd = rand, data = data_train, 
+    #       lambda = lambdas[j]), siilent = TRUE)
     
     return()
     
@@ -477,18 +480,6 @@ lambda_range <- function(data, formula, p,
 ```
 
 
-```{r}
-flattenCorrMatrix <- function(cormat, pmat) {
-  ut <- upper.tri(cormat)
-  data.frame(
-    row = rownames(cormat)[row(cormat)[ut]],
-    column = rownames(cormat)[col(cormat)[ut]],
-    cor  =(cormat)[ut],
-    p = pmat[ut]
-    )
-}
-```
-
 
 ```{r}
 ## trying suggestion of using LASSO with very low regularization parameter
@@ -531,20 +522,23 @@ x = x[, -1]
 model_lasso <- glmnet(x = x, y = y, lambda = 0.1)
 coefs_for_glm <- coef(model_lasso)
 coefs_for_glm <- names(coefs_for_glm[coefs_for_glm[, 1] != 0, 1][-1])
-cfg.abbrev <- coefs_for_glm
 
-formula <- as.formula(paste(outcome, "~", paste(cfg.abbrev, collapse = " + ")))
+formula <- as.formula(paste(outcome, "~", paste(cfg.abbrev, 
+                                                collapse = " + ")))
 
-lambda_range_1 <- lambda_range(df_analysis, formula, length(cfg.abbrev))
+lambda_range_1 <- lambda_range(df_analysis, formula,
+                               length(coefs_for_glm))
 
-mixed_lasso_1 <- cv_glmmLasso(data = df_analysis, formula, 
-                              rand=list(provid=~1),
-                              lambda_min = lambda_range_1[1], 
-                              lambda_max = lambda_range_1[2]) 
+glmmLasso(fix = formula, rnd = list(provid=~1), lambda = 5)
 
-coefs_glm_1 <- mixed_lasso_1$coefficients[2:(length(cfg.abbrev) + 1)]
-predictive_coefs_glm_1 <- sum(mixed_lasso_1$coefficients[2:(length(cfg.abbrev) + 1)] 
-                              != 0)
+# mixed_lasso_1 <- cv_glmmLasso(data = df_analysis, formula, 
+#                               rand=list(provid=~1),
+#                               lambda_min = lambda_range_1[1], 
+#                               lambda_max = lambda_range_1[2]) 
+# 
+# coefs_glm_1 <- mixed_lasso_1$coefficients[2:(length(cfg.abbrev) + 1)]
+# predictive_coefs_glm_1 <- sum(mixed_lasso_1$coefficients[2:(length(cfg.abbrev) + 1)] 
+#                               != 0)
 
 ```
 

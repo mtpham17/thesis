@@ -479,68 +479,92 @@ lambda_range <- function(data, formula, p,
 }
 ```
 
-
+## row 1 on table of notes -- large_c with selection of variables
 
 ```{r}
 ## trying suggestion of using LASSO with very low regularization parameter
 outcome <- outcomes_use_y1[1]
 other_outcomes <- outcomes[outcomes != outcome]
 
-
-df_analysis_noncor <- outcomes_and_obs_full_y1_largec %>%
-  filter(!is.na(outcomes_and_obs_full_y1_largec[[outcome]])) %>%
+data_processing <- function(data) {
+  df_analysis_noncor <- data %>%
+  filter(!is.na(data[[outcome]])) %>%
   dplyr::select(-c(all_of(other_outcomes), caretype, classid, 
                    cid, nsweeps.y,
                    actualtype, nsweeps.x)) 
+  
+  df_analysis_noncor <- as.data.frame(df_analysis_noncor)
+  cor_matrix_largec <- cor(as.matrix(select_if(df_analysis, is.numeric)))
+  cor_1 <- which(cor_matrix > 0.95, arr.ind = TRUE)
+  cor_df <- as.data.frame(cor_1)
+  cor_df$variables <- rownames(cor_1)
+  rownames(cor_df) <- NULL
+  high_corr <- cor_df[cor_df$row != cor_df$col, "variables"]
 
-df_analysis_noncor <- as.data.frame(df_analysis_noncor)
+  df_analysis <- df_analysis_noncor %>%
+    dplyr::select(-high_corr)
+  
+  return(df_analysis)
+}
+
+df_analysis_largec <- data_processing(outcomes_and_obs_full_y1_largec)
+df_analysis_singletons <- data_processing(outcomes_and_obs_full_y1)
 ```
 
 
 ```{r}
-cor_matrix <- cor(as.matrix(select_if(df_analysis, is.numeric)))
-cor_1 <- which(cor_matrix > 0.95, arr.ind = TRUE)
-cor_df <- as.data.frame(cor_1)
-cor_df$variables <- rownames(cor_1)
-rownames(cor_df) <- NULL
-high_corr <- cor_df[cor_df$row != cor_df$col, "variables"]
-
-df_analysis <- df_analysis_noncor %>%
-  dplyr::select(-high_corr)
-
-options(na.action="na.pass")
-x = model.matrix(as.formula(paste(outcome, "~ . -provid")), 
-                 data = df_analysis)
-
-y = df_analysis[[outcome]]
-x = x[, -1]
-
-# call cv.glmnet()
-model_lasso <- glmnet(x = x, y = y, lambda = 0.1)
-coefs_for_glm <- coef(model_lasso)
-coefs_for_glm <- names(coefs_for_glm[coefs_for_glm[, 1] != 0, 1][-1])
-
-formula <- as.formula(paste(outcome, "~", paste(coefs_for_glm, 
+pre_lasso <- function(x, y, fixed_lambda, mixed_lambdas = seq(0.01, 500, length = 20)) {
+  model_lasso <- glmnet(x = x, y = y, lambda = fixed_lambda)
+  coefs_for_glm <- coef(model_lasso)
+  coefs_for_glm <- names(coefs_for_glm[coefs_for_glm[, 1] != 0, 1][-1])
+  formula <- as.formula(paste(outcome, "~", paste(coefs_for_glm, 
                                                 collapse = " + ")))
-
-lambdas <- seq(0.01, 500, length = 20)
-predictive_coefs_1 <- list()
-num_coefs_1 <- list()
-
-for (i in 1:length(lambdas)) {
+  predictive_coefs <- list()
+  num_coefs <- list()
+  
+  for (i in 1:length(mixed_lambdas)) {
   mixed_lasso <- glmmLasso(data = df_analysis,
                            fix = formula, 
                            rnd = list(provid=~1),
-                           lambda = lambdas[i])
-  predictive_coefs_1[[i]] <- 
-    mixed_lasso$coefficients[2:(length(cfg.abbrev) + 1)]
-  num_coefs_1[[i]] <-
-    sum(mixed_lasso$coefficients[2:(length(cfg.abbrev) + 1)] != 0)
+                           lambda = mixed_lambdas[i])
+  predictive_coefs[[i]] <- 
+    mixed_lasso$coefficients[2:(length(coefs_for_glm) + 1)]
+  num_coefs[[i]] <-
+    sum(mixed_lasso$coefficients[2:(length(coefs_for_glm) + 1)] != 0)
   
+  }
+  
+  return(list("coefficients" = predictive_coefs, 
+              "coefficient_number" = num_coefs))
 }
+
+options(na.action="na.pass")
+x_largec = model.matrix(as.formula(paste(outcome, "~ . -provid")), 
+                 data = df_analysis_largec)
+
+y_largec = df_analysis_largec[[outcome]]
+x_largec = x_largec[, -1]
+
+results_01_largec <- pre_lasso(x_largec, y_largec, 0.1)
+results_001_largec <- pre_lasso(x_largec, y_largec, 0.01)
+
+x_singleton = model.matrix(as.formula(paste(outcome, "~ . -provid")), 
+                 data = df_analysis_singleton)
+
+y_singleton = df_analysis_singleton[[outcome]]
+x_singleton = x_singleton[, -1]
+
+results_01_singleton <- pre_lasso(x_singleton, y_singleton, 0.1)
+results_001_singleton <- pre_lasso(x_singleton, y_singleton, 0.01)
 
 ```
 
+
+## row 2 on table of notes -- full data set (including singletons) with selection of variables
+
+```{r}
+
+```
 
 
 

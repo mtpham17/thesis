@@ -220,11 +220,6 @@ generate_data <- function(n_bar, J, alpha,
   k <- sqrt(var(data$Y)/(snr*var(epsilon)))
   data$Y = data$Y + k*epsilon 
   
-  # 02/13/23: adding signal to noise for more insightful graphs
-  
-  k <- sqrt(var(data$Y)/(snr*var(epsilon)))
-  data$Y = data$Y + k*epsilon 
-  
   data$j <- as.factor(rep(1:J, times = sample_size))
   
   return(data)
@@ -377,10 +372,16 @@ analyze <- function(data, p, true_beta, default) {
   basic_linear <- lm(as.formula(paste("Y ~", covariates)), data = data)
   
   # "the two models agreed on ___ percent of the covariates" -- agreement defined as they both 
-  # deemed a beta as non-zero out of the total significant betas. 
+  # deemed a beta as non-zero out of the total significant betas.
   
-  agreement <- sum((coefficients_fixed != 0 & coefficients_mixed != 0) |
-                  (coefficients_fixed == 0 & coefficients_mixed == 0)) / p
+  coefficients_fixed_categorical <- factor(coefficients_fixed > default / 2, 
+                                           levels = levels(factor(c(TRUE, FALSE))))
+  
+  coefficients_mixed_categorical <- factor(coefficients_mixed > default / 2, 
+                                         levels = levels(factor(c(TRUE, FALSE))))
+  
+  agreement <- sum((coefficients_fixed_categorical & coefficients_mixed_categorical) |
+                  (!coefficients_fixed_categorical & !coefficients_mixed_categorical)) / p
   
   y_hat_fixed <- predict(model_lasso_fixed, newx = X_fixed, s = model_lasso_fixed$lambda.min)
   y_hat_mixed <- predict(model_lasso_mixed, newx = X_fixed, s = lambda_min)

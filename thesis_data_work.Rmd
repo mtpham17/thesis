@@ -513,7 +513,14 @@ df_analysis_singleton <- data_processing(outcomes_and_obs_full_y1)
 
 
 ```{r}
-pre_lasso <- function(x, y, fixed_lambda, mixed_lambdas = seq(0.01, 500, length = 20)) {
+pre_lasso <- function(data, fixed_lambda, mixed_lambdas = seq(0.01, 600, length = 20)) {
+  options(na.action="na.pass")
+  x = model.matrix(as.formula(paste(outcome, "~ . -provid")), 
+                   data = data)
+  
+  y = data[[outcome]]
+  x = x[, -1]
+  
   model_lasso <- glmnet(x = x, y = y, lambda = fixed_lambda)
   coefs_for_glm <- coef(model_lasso)
   coefs_for_glm <- names(coefs_for_glm[coefs_for_glm[, 1] != 0, 1][-1])
@@ -523,14 +530,13 @@ pre_lasso <- function(x, y, fixed_lambda, mixed_lambdas = seq(0.01, 500, length 
   num_coefs <- list()
 
   for (i in 1:length(mixed_lambdas)) {
-  mixed_lasso <- glmmLasso(data = df_analysis,
+  mixed_lasso <- glmmLasso(data = data,
                            fix = formula, 
                            rnd = list(provid=~1),
                            lambda = mixed_lambdas[i])
-  predictive_coefs[[i]] <- 
-    mixed_lasso$coefficients[2:(length(coefs_for_glm) + 1)]
-  num_coefs[[i]] <-
-    sum(mixed_lasso$coefficients[2:(length(coefs_for_glm) + 1)] != 0)
+  relevant_coefficients <- mixed_lasso$coefficients[2:(length(coefs_for_glm) + 1)]
+  predictive_coefs[[i]] <- relevant_coefficients[relevant_coefficients != 0]
+  num_coefs[[i]] <- length(relevant_coefficients)
   
   }
   
@@ -538,24 +544,11 @@ pre_lasso <- function(x, y, fixed_lambda, mixed_lambdas = seq(0.01, 500, length 
               "coefficient_number" = num_coefs))
 }
 
-options(na.action="na.pass")
-x_largec = model.matrix(as.formula(paste(outcome, "~ . -provid")), 
-                 data = df_analysis_largec)
-
-y_largec = df_analysis_largec[[outcome]]
-x_largec = x_largec[, -1]
-
-results_01_largec <- pre_lasso(x_largec, y_largec, 0.1)
-results_001_largec <- pre_lasso(x_largec, y_largec, 0.01)
-
-x_singleton = model.matrix(as.formula(paste(outcome, "~ . -provid")), 
-                 data = df_analysis_singleton)
-
-y_singleton = df_analysis_singleton[[outcome]]
-x_singleton = x_singleton[, -1]
+results_01_largec <- pre_lasso(df_analysis_largec, 0.1)
+results_001_largec <- pre_lasso(df_analysis_largec, 0.01)
 
 # results_01_singleton <- pre_lasso(x_singleton, y_singleton, 0.1)
-results_001_singleton <- pre_lasso(x_singleton, y_singleton, 0.01)
+# results_001_singleton <- pre_lasso(x_singleton, y_singleton, 0.01)
 
 ```
 
@@ -567,14 +560,42 @@ coefs_non_prelasso <- colnames(df_analysis_largec)[! colnames(df_analysis_largec
 formula_non_prelasso <-  as.formula(paste(outcome, "~", paste(coefs_non_prelasso, 
                                                 collapse = " + ")))
 
-
 glmmLasso(data = df_analysis_largec, fix = formula_non_prelasso, 
           rnd = list(provid=~1), lambda = 5)
 
 glmmLasso(data = df_analysis_singleton, fix = formula_non_prelasso,
           rnd = list(provid=~1), lambda = 5)
 ```
+## chose preprocessing method -- now comparing agreement?
 
+## first method -- use the same lambda value that cv.glmnet (fixed) chooses
+
+```{r}
+all_vars <- colnames(df_analysis_largec)[! (colnames(df_analysis_largec) %in% c("provid", outcome))]
+options(na.action="na.pass")
+x = model.matrix(as.formula(paste(outcome, "~ . -provid")), 
+                 data = df_analysis_largec)
+
+y = df_analysis_largec[[outcome]]
+x = x[, -1]
+
+model_lasso <- glmnet(x = x, y = y, lambda = 0.1)
+coefs_for_glm <- coef(model_lasso)
+coefs_for_glm <- names(coefs_for_glm[coefs_for_glm[, 1] != 0, 1][-1])
+formula <- as.formula(paste(outcome, "~", paste(coefs_for_glm, 
+                                              collapse = " + ")))
+
+fixed_lasso <- cv.glmnet(x, y, alpha = 1)
+coefs_fixed <- coef(fixed_lasso, s = fixed_lasso$lambda.min)[-1]
+nonzero_coefs_fixed <- which(coefs_fixed != 0)
+nonzero_coefs_fixed <- all_vars[nonzero_coefs_fixed]
+
+mixed_lasso <- glmmLasso(data = df_analysis_largec, fix = formula, 
+                         rnd = list(provid=~1), lambda = fixed_lasso$lambda.min)
+coefs_mixed <- mixed_lasso$coefficients[-1]
+nonzero_coefs_mixed <- names(coefs_mixed[coefs_mixed != 0])
+
+```
 
 
 ```{r}

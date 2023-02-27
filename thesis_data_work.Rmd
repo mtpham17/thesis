@@ -508,7 +508,7 @@ data_processing <- function(data) {
 }
 
 df_analysis_largec <- data_processing(outcomes_and_obs_full_y1_largec)
-df_analysis_singletons <- data_processing(outcomes_and_obs_full_y1)
+df_analysis_singleton <- data_processing(outcomes_and_obs_full_y1)
 ```
 
 
@@ -521,7 +521,7 @@ pre_lasso <- function(x, y, fixed_lambda, mixed_lambdas = seq(0.01, 500, length 
                                                 collapse = " + ")))
   predictive_coefs <- list()
   num_coefs <- list()
-  
+
   for (i in 1:length(mixed_lambdas)) {
   mixed_lasso <- glmmLasso(data = df_analysis,
                            fix = formula, 
@@ -554,7 +554,7 @@ x_singleton = model.matrix(as.formula(paste(outcome, "~ . -provid")),
 y_singleton = df_analysis_singleton[[outcome]]
 x_singleton = x_singleton[, -1]
 
-results_01_singleton <- pre_lasso(x_singleton, y_singleton, 0.1)
+# results_01_singleton <- pre_lasso(x_singleton, y_singleton, 0.1)
 results_001_singleton <- pre_lasso(x_singleton, y_singleton, 0.01)
 
 ```
@@ -563,7 +563,16 @@ results_001_singleton <- pre_lasso(x_singleton, y_singleton, 0.01)
 ## row 2 on table of notes -- full data set (including singletons) with selection of variables
 
 ```{r}
+coefs_non_prelasso <- colnames(df_analysis_largec)[! colnames(df_analysis_largec) %in% c("provid", outcome)]
+formula_non_prelasso <-  as.formula(paste(outcome, "~", paste(coefs_non_prelasso, 
+                                                collapse = " + ")))
 
+
+glmmLasso(data = df_analysis_largec, fix = formula_non_prelasso, 
+          rnd = list(provid=~1), lambda = 5)
+
+glmmLasso(data = df_analysis_singleton, fix = formula_non_prelasso,
+          rnd = list(provid=~1), lambda = 5)
 ```
 
 

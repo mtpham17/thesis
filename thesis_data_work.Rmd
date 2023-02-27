@@ -373,15 +373,6 @@ for (outcome in outcomes_use_y1) {
 ```
 
 
-```{r}
-# basic linear model (to get an idea of what to generate in simulation)
-outcomes_and_obs_full_y1_largec_lm <- outcomes_and_obs_full_y1_largec %>%
-  select(-c(caretype, actualtype, nsweeps.y, cid, classid, provid))
-
-# summary(lm(as.formula(paste(outcomes_use_y1, "~ .")), 
-#    data = outcomes_and_obs_full_y1_largec_lm))
-```
-
 
 ```{r}
 cv_glmmLasso <- function(data, formula, rand=list(j=~1),
@@ -487,6 +478,7 @@ outcome <- outcomes_use_y1[1]
 other_outcomes <- outcomes[outcomes != outcome]
 
 data_processing <- function(data) {
+  print(outcome)
   df_analysis_noncor <- data %>%
   filter(!is.na(data[[outcome]])) %>%
   dplyr::select(-c(all_of(other_outcomes), caretype, classid, 
@@ -502,7 +494,7 @@ data_processing <- function(data) {
   high_corr <- cor_df[cor_df$row != cor_df$col, "variables"]
 
   df_analysis <- df_analysis_noncor %>%
-    dplyr::select(-high_corr)
+    dplyr::select(-high_corr) %>%
   
   return(df_analysis)
 }
@@ -597,6 +589,69 @@ nonzero_coefs_mixed <- names(coefs_mixed[coefs_mixed != 0])
 
 ```
 
+## exploring data to understand what kind of simulation to run
+
+```{r}
+coefs <- summary(lm(as.formula(paste(outcome, "~ . - provid")),
+   data = df_analysis_largec, na.action = na.exclude))$coefficients
+
+coefs_df <- as.data.frame(coefs)
+
+hist(coefs_df$Estimate)
+hist(coefs_df$Estimate[coefs_df$Estimate < 500 & coefs_df$Estimate > -500])
+# looks like beta type 4 with some scaling? default = 50?
+
+# generate_data(n_bar, J, alpha, 
+#                     type, p, s, default,
+#                     cov_x, scale, base_mean_x = 0, sigma_x = 1, 
+#                     mean_r = 0, sigma_r, 
+#                     snr,
+#                     mean_noise = 0, sigma_noise = 1)
+
+clusters <- df_analysis_largec %>% group_by(provid) %>% summarize(n = n()) %>% ungroup()
+nrow(clusters)
+# J = 232 --> let's round this down to 50 for now lol
+mean(clusters$n)
+# n_bar = 3
+var(clusters$n)
+hist(clusters$n[clusters$n < 6])
+# alpha = 1/3?
+
+ggplot(data = df_analysis_largec, 
+       mapping = aes(y = nclass)) +
+  geom_histogram()
+
+r2 <- summary(lm(as.formula(paste(outcome, "~ . - provid")),
+   data = df_analysis_largec, na.action = na.exclude))$r.squared
+# r squared value is 0.315
+snr <- r2 / (1 - r2)
+# snr value is 0.458766
+
+# there are so many clusters? just assume scale = 1 for now...
+
+# 220 predictors.
+# round down to 110?
+
+cor <- cor(as.matrix(select_if(df_analysis, is.numeric)))
+(sum(cor[1, ], na.rm = TRUE) - 1) / 284
+# cov_x = -0.0004
+```
+
+
+- type 4
+- p = 110
+- s = 7
+- default = 50
+- cov_x = -0.0004
+- scale = 1?
+- snr = 0.46
+```{r}
+colnames(df_analysis_largec)
+# "o_c_verbal_Fuss.Cry_FC"                                    
+#   [5] "o_c_verbal_Listening_L"                                    
+#   [6] "o_c_verbal_Talk_T"                                         
+#   [7] "o_c_verbal_TalkSounds_TS" 
+```
 
 ```{r}
 # need to perform cross validation for both regular and glmmLasso

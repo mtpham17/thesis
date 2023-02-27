@@ -486,7 +486,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_noise, sigma_noise) 
   {
     # fname = paste0("/Users/thupham/Desktop/thesis/results/", chunkNo, "_", seed, ".csv")
-    fname = paste0("/n/home04/thupham17/thesis/results/thesis_timing_testrun_2/",
+    fname = paste0("/n/home04/thupham17/thesis/results/0227_with_data/",
                chunkNo, "_", seed, ".csv")
     res = NA
     if (!file.exists(fname)) {
@@ -506,11 +506,40 @@ file_saving_sim = function(chunkNo, seed, reps,
 }
 ```
 
+
+## moment of truth
+
+- type 4
+- p = 110
+- s = 7
+- default = 50
+- cov_x = -0.0004
+- scale = 1?
+- snr = 0.46
+
 ```{r}
 options(warn=-1)
 
 R <- 6
 M_CHUNK <- 3
+
+params <- expand.grid(chunkNo = 1:M_CHUNK,
+                      n_bar = 3, 
+                      J = 50,
+                      alpha = 1/3, 
+                      type = 4, 
+                      p = 110, 
+                      s = 7, 
+                      default = 50,
+                      cov_x = -0.0004,
+                      scale = 1,
+                      base_mean_x = 0,
+                      sigma_x = 1,
+                      mean_r = 0,
+                      sigma_r = 1,
+                      snr = 0.46,
+                      mean_noise = 0,
+                      sigma_noise = 1)
 
 # params <- expand.grid(chunkNo = 1:M_CHUNK,
 #                       n_bar = 50,
@@ -530,40 +559,21 @@ M_CHUNK <- 3
 #                       mean_noise = 0,
 #                       sigma_noise = 1)
 
-params <- expand.grid(chunkNo = 1:M_CHUNK,
-                      n_bar = 50,
-                      J = 5,
-                      alpha = 0.5,
-                      type = 1,
-                      p = 12,
-                      s = 4,
-                      default = 1,
-                      cov_x = 0.25,
-                      scale = 1,
-                      base_mean_x = 0,
-                      sigma_x = 1,
-                      mean_r = 0,
-                      sigma_r = 2,
-                      snr = 0.5,
-                      mean_noise = 0,
-                      sigma_noise = 1)
-
-# before snr:
-
 # params <- expand.grid(chunkNo = 1:M_CHUNK,
-#                       n_bar = seq(20, 80, by = 20),
+#                       n_bar = 50,
 #                       J = 5,
-#                       alpha = seq(0, 1, by = 0.25),
-#                       type = 1:5,
-#                       p = seq(8, 20, by = 4),
+#                       alpha = 0.5,
+#                       type = 1,
+#                       p = 12,
 #                       s = 4,
 #                       default = 1,
 #                       cov_x = 0.25,
-#                       scale = seq(0, 4, by = 1),
+#                       scale = 1,
 #                       base_mean_x = 0,
 #                       sigma_x = 1,
 #                       mean_r = 0,
 #                       sigma_r = 2,
+#                       snr = 0.5,
 #                       mean_noise = 0,
 #                       sigma_noise = 1)
 
@@ -577,7 +587,7 @@ params <- params %>% mutate(
 
 ```{r}
 # sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
-sink("/Users/thupham/Desktop/thesis/logs/output_test.txt")
+sink("/Users/thupham/Desktop/thesis/logs/with_data.txt")
 
 tictoc::tic(paste(R, "iterations one set"))
 
@@ -683,29 +693,3 @@ write.csv(dataset[[1]], "/n/home04/thupham17/thesis/concat_results/021323_run.cs
 # write.csv(results, "/n/home04/thupham17/fasrc/results.csv")
 ```
 
-```{r}
-# Profiling R Code
-# to profile code with system time method, etc.
-
-# quickadd <- function(g){
-# *return(g+1)*
-# *}*
-# 
-# *slowadd <- function(g){*
-# *h <- rep(NA, length(g))*
-# *for (i in 1:length(g)){*
-# *h[i] <- g[i] + 1*
-# *}*
-# *return(h)*
-# *}*
-# 
-# *system.time(a <- slowadd(g))*
-# user system elapsed
-# 0.34 0.00 0.34
-# 
-# *system.time(a <- quickadd(g))*
-# user system elapsed
-# 0 0 0
-
-#code
-```

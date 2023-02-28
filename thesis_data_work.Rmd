@@ -52,6 +52,8 @@ For each child in the COP data, we calculate:
 We then calculate the class average of the TOP indicators for the adults in the class by averaging across sweeps, and merge this data (one to many) with the child-level data. This merged data set contains XXX children in XXX classes
 
 
+
+
 ```{r y1_obs, warning=FALSE, cache=TRUE}
 #Input the Year One long child and teacher observation data 
 y1_child_obs_raw <- read.dta13("y1o_c_long.dta")
@@ -377,15 +379,15 @@ for (outcome in outcomes_use_y1) {
 ```{r}
 cv_glmmLasso <- function(data, formula, rand=list(j=~1),
                       lambda_step=20, lambda_min = lambda_min,
-                      lambda_max = lambda_max) {
+                      lambda_max = lambda_max, folds = 5) {
   lambdas <- seq(lambda_min, lambda_max, length = lambda_step)
   
-  N <- nrow(data)
+  N <- dim(data)[1]
   ind <- sample(N, N)
   
   # number of folds
   
-  kk <- 5
+  kk <- folds
   nk <- floor(N/kk)
   
   pred_error <- matrix(NA, ncol=kk, nrow = lambda_step)
@@ -402,28 +404,21 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
       }
   
     data_train <- data[-indi,]
-    data_test <- data[indi,]
+    data_test <-data[indi,]
   
-    glm <- glmmLasso(fix = formula, rnd = rand, data = data_train, 
-              lambda = lambdas[j]) 
-    
-    # glm <- try(glmmLasso(fix = formula, rnd = rand, data = data_train, 
-    #       lambda = lambdas[j]), siilent = TRUE)
-    
-    return()
-    
-    print(j)
+    glm <- try(glmmLasso(fix = formula, rnd = rand, data = data_train, 
+              lambda = lambdas[j]), silent = TRUE) 
             
-        # if(!inherits(glm, "try-error"))
-        # {  
-        #   y_hat <- predict(glm, data_test)  
-        #   pred_error[j,i]<- sqrt(sum((data_test$Y - y_hat)^2) / nrow(data_test))
-        # }
-        # 
-        # else 
-        # {
-        #   return("error in choosing lambda value")
-        # }
+        if(!inherits(glm, "try-error"))
+        {  
+          y_hat <- predict(glm, data_test)  
+          pred_error[j,i]<- sqrt(sum((data_test$Y - y_hat)^2) / nrow(data_test))
+        }
+        
+        else 
+        {
+          return("error in choosing lambda value")
+        }
     }
   }
   
@@ -431,8 +426,6 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
   pred_error_vec <- apply(pred_error, 1, sum)
   return(lambdas[which.min(pred_error_vec)])  
 }
-
-## other suggestion (haven't implemented this): run a simulation with a lot of lambdas, get a range of lambdas that we consistently see across these simulations. restrict the range based on those results
 ```
 
 
@@ -469,6 +462,9 @@ lambda_range <- function(data, formula, p,
     return(c(min_lambda, max_lambda))
 }
 ```
+
+
+### BEGIN BRAINSTORMING FOR PREPROCESSING
 
 ## row 1 on table of notes -- large_c with selection of variables
 
@@ -555,10 +551,11 @@ formula_non_prelasso <-  as.formula(paste(outcome, "~", paste(coefs_non_prelasso
 glmmLasso(data = df_analysis_largec, fix = formula_non_prelasso, 
           rnd = list(provid=~1), lambda = 5)
 
-glmmLasso(data = df_analysis_singleton, fix = formula_non_prelasso,
-          rnd = list(provid=~1), lambda = 5)
+# glmmLasso(data = df_analysis_singleton, fix = formula_non_prelasso,
+#           rnd = list(provid=~1), lambda = 5)
 ```
-## chose preprocessing method -- now comparing agreement?
+
+### END BRAINSTORMING FOR PREPROCESSING
 
 ## first method -- use the same lambda value that cv.glmnet (fixed) chooses
 
@@ -582,8 +579,13 @@ coefs_fixed <- coef(fixed_lasso, s = fixed_lasso$lambda.min)[-1]
 nonzero_coefs_fixed <- which(coefs_fixed != 0)
 nonzero_coefs_fixed <- all_vars[nonzero_coefs_fixed]
 
+
+lambda_range <- lambda_range(df_analysis_largec, length(coefs_for_glm))
+best_lambda <- cv_glmmLasso(df_analysis_largec, formula, rand = list(provid = ~1),
+                            lambda_step = 20, min_lambda = lambda_range[1],
+                            max_lambda = max_lambda)
 mixed_lasso <- glmmLasso(data = df_analysis_largec, fix = formula, 
-                         rnd = list(provid=~1), lambda = fixed_lasso$lambda.min)
+                         rnd = list(provid=~1), lambda = best_lambda)
 coefs_mixed <- mixed_lasso$coefficients[-1]
 nonzero_coefs_mixed <- names(coefs_mixed[coefs_mixed != 0])
 

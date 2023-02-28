@@ -3,7 +3,7 @@ title: "simulation_scratchwork"
 output: pdf_document
 date: '2023-01-12'
 editor_options: 
-  chunk_output_type: inline
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -34,7 +34,7 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 # https://rdrr.io/cran/glmmLasso/src/demo/glmmLasso-soccer.r
 cv_glmmLasso <- function(data, formula, rand=list(j=~1),
                       lambda_step=20, lambda_min = lambda_min,
-                      lambda_max = lambda_max) {
+                      lambda_max = lambda_max, kk=5) {
   lambdas <- seq(lambda_min, lambda_max, length = lambda_step)
   
   N <- dim(data)[1]
@@ -42,7 +42,6 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
   
   # number of folds
   
-  kk <- 5
   nk <- floor(N/kk)
   
   pred_error <- matrix(NA, ncol=kk, nrow = lambda_step)
@@ -241,12 +240,10 @@ test_df <- generate_data(n_bar = 50, J = 4, alpha = 0.8,
 
 # need to figure out what the baseline values of lambda are 
 lambda_range <- function(data, p, baseline_min_lambda = 10^(-2), baseline_max_lambda = 10^3,
-                         lambda_no = 100) {
-    
+                         lambda_no = 20) {
+  
     var.names <- paste("X", 1:p, sep = "")
-    com.names <- lapply(seq_along(var.names),
-                        function(i) combn(var.names, i, FUN = paste, collapse = " + "))
-    covariates <- com.names[[p]]
+    formula <- as.formula(paste("Y ~", paste(var.names, collapse = " + ")))
     
     lambdas <- seq(baseline_min_lambda, baseline_max_lambda, length = lambda_no)
     min_lambda <- baseline_min_lambda
@@ -254,7 +251,8 @@ lambda_range <- function(data, p, baseline_min_lambda = 10^(-2), baseline_max_la
     coefs <- rep(0, lambda_no)
     
     for (l in 1:length(lambdas)) {
-      mixed_lasso <- glmmLasso(fix = as.formula(paste("Y ~", covariates)),
+      print(l)
+      mixed_lasso <- glmmLasso(fix = formula,
                            rnd=list(j=~1),
                            data = data,
                            lambda = lambdas[l],
@@ -271,6 +269,7 @@ lambda_range <- function(data, p, baseline_min_lambda = 10^(-2), baseline_max_la
                          lambdas[min(which(coefs == 0))])
     return(c(min_lambda, max_lambda))
 }
+
 ```
 
 ```{r}
@@ -333,12 +332,9 @@ quiet_mixed_lasso <- quietly(glmmLasso)
 # Analyze
 analyze <- function(data, p, true_beta, default) {
   var.names <- paste("X", 1:p, sep = "")
-  com.names <- lapply(seq_along(var.names),
-                    function(i) combn(var.names, i, FUN = paste, collapse = " + "))
-  covariates <- com.names[[p]]
+  formula <- as.formula(paste("Y ~", paste(var.names, collapse = " + ")))
   
-  X_fixed <- model.matrix(as.formula(paste("Y ~", covariates)),
-                          data = data)
+  X_fixed <- model.matrix(formula, data = data)
   X_fixed <- X_fixed[, -1]
 
   model_lasso_fixed <- quiet_fixed_lasso(x = X_fixed, y = data$Y, nfolds = 5, alpha = 1)
@@ -350,38 +346,43 @@ analyze <- function(data, p, true_beta, default) {
   lambda_range <- quiet_lambda_range(data, p)
   errors_lambda_range <- sum(unlist(lapply(lambda_range[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
   lambda_range <- lambda_range$result
+  print(lambda_range)
   
   best_lambda <- quiet_cv_glmmLasso(data = data,
-                             formula = as.formula(paste("Y ~", covariates)), 
+                             formula = formula, 
                              lambda_min = lambda_range[1], lambda_max = 
                                lambda_range[2])
   errors_best_lambda <- sum(unlist(lapply(best_lambda[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
   best_lambda <- best_lambda$result
+  print(best_lambda)
   
-  model_lasso_mixed <- quiet_mixed_lasso(fix = as.formula(paste("Y ~", covariates)),
+  model_lasso_mixed <- quiet_mixed_lasso(fix = formula,
                                          rnd=list(j=~1),
                                          data = data,
                                          lambda=best_lambda,
                                          final.re = TRUE)
   errors_model_lasso_mixed <- sum(unlist(lapply(model_lasso_mixed[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
   model_lasso_mixed <- model_lasso_mixed$result
+  print(model_lasso_mixed)
   
   coefficients_mixed <- model_lasso_mixed$coefficients[2:(length(true_beta) + 1)]
 
-  
-  basic_linear <- lm(as.formula(paste("Y ~", covariates)), data = data)
+  basic_linear <- lm(formula, data = data)
   
   # "the two models agreed on ___ percent of the covariates" -- agreement defined as they both 
   # deemed a beta as non-zero out of the total significant betas.
   
-  coefficients_fixed_categorical <- factor(coefficients_fixed > default / 2, 
+  coefficients_fixed <- coefficients_fixed > default / 2
+  coefficients_mixed <- coefficients_mixed > default / 2
+  
+  coefficients_fixed_categorical <- factor(coefficients_fixed, 
                                            levels = levels(factor(c(TRUE, FALSE))))
   
-  coefficients_mixed_categorical <- factor(coefficients_mixed > default / 2, 
+  coefficients_mixed_categorical <- factor(coefficients_mixed, 
                                          levels = levels(factor(c(TRUE, FALSE))))
   
-  agreement <- sum((coefficients_fixed_categorical & coefficients_mixed_categorical) |
-                  (!coefficients_fixed_categorical & !coefficients_mixed_categorical)) / p
+  agreement <- sum((coefficients_fixed & coefficients_mixed) |
+                  (!coefficients_fixed & !coefficients_mixed)) / p
   
   y_hat_fixed <- predict(model_lasso_fixed, newx = X_fixed, s = model_lasso_fixed$lambda.min)
   y_hat_mixed <- predict(model_lasso_mixed, newx = X_fixed, s = lambda_min)
@@ -400,8 +401,25 @@ analyze <- function(data, p, true_beta, default) {
            fixed_results, mixed_results, errors))
 }
 
-test_beta <- generate_beta(1, 10, 3, 1)
-results <- analyze(test_df, 10, test_beta, 1)
+data <- generate_data(n_bar = 3, 
+                      J = 50,
+                      alpha = 1/3, 
+                      type = 4, 
+                      p = 110, 
+                      s = 7, 
+                      default = 1,
+                      cov_x = -0.0004,
+                      scale = 1,
+                      base_mean_x = 0,
+                      sigma_x = 1,
+                      mean_r = 0,
+                      sigma_r = 1,
+                      snr = 0.46,
+                      mean_noise = 0,
+                      sigma_noise = 1)
+
+true_beta <- generate_beta(4, 110, 7)
+results <- analyze(data, 110, true_beta, 1)
 
 ```
 
@@ -530,7 +548,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       type = 4, 
                       p = 110, 
                       s = 7, 
-                      default = 50,
+                      default = 1,
                       cov_x = -0.0004,
                       scale = 1,
                       base_mean_x = 0,
@@ -556,24 +574,6 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
 #                       mean_r = 0,
 #                       sigma_r = 2,
 #                       snr = seq(0.1, 1.1, by = 0.2),
-#                       mean_noise = 0,
-#                       sigma_noise = 1)
-
-# params <- expand.grid(chunkNo = 1:M_CHUNK,
-#                       n_bar = 50,
-#                       J = 5,
-#                       alpha = 0.5,
-#                       type = 1,
-#                       p = 12,
-#                       s = 4,
-#                       default = 1,
-#                       cov_x = 0.25,
-#                       scale = 1,
-#                       base_mean_x = 0,
-#                       sigma_x = 1,
-#                       mean_r = 0,
-#                       sigma_r = 2,
-#                       snr = 0.5,
 #                       mean_noise = 0,
 #                       sigma_noise = 1)
 

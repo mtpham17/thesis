@@ -36,6 +36,91 @@ replace.na <- function(var){
          ifelse(is.factor(var), getmode(var), mean(var, na.rm = TRUE)), var)
 }
 ```
+
+```{r}
+cv_glmmLasso <- function(data, formula, rand=list(j=~1),
+                      lambda_step=20, lambda_min = lambda_min,
+                      lambda_max = lambda_max, kk = 5) {
+  lambdas <- seq(lambda_min, lambda_max, length = lambda_step)
+  
+  N <- dim(data)[1]
+  ind <- sample(N, N)
+  
+  nk <- floor(N/kk)
+  
+  pred_error <- matrix(NA, ncol=kk, nrow = lambda_step)
+
+  
+  for (j in 1:lambda_step) {
+    for (i in 1:kk)
+    {
+      if (i < kk) {
+      indi <- ind[(i-1)*nk+(1:nk)]
+      }
+      else {
+      indi <- ind[((i-1)*nk+1):N]
+      }
+  
+    data_train <- data[-indi,]
+    data_test <-data[indi,]
+  
+    glm <- try(glmmLasso(fix = formula, rnd = rand, data = data_train, 
+              lambda = lambdas[j]), silent = TRUE) 
+            
+        if(!inherits(glm, "try-error"))
+        {  
+          y_hat <- predict(glm, data_test)  
+          pred_error[j,i]<- sqrt(sum((data_test$Y - y_hat)^2) / nrow(data_test))
+        }
+        
+        else 
+        {
+          return("error in choosing lambda value")
+        }
+    }
+  }
+  
+  # find lambda which gives lowest prediction error
+  pred_error_vec <- apply(pred_error, 1, sum)
+  return(lambdas[which.min(pred_error_vec)])  
+}
+```
+
+
+
+```{r}
+lambda_range <- function(data, formula, p,
+                         baseline_min_lambda = 10^(-2),
+                         baseline_max_lambda = 10^3,
+                         lambda_no = 20) {
+    
+    lambdas <- seq(baseline_min_lambda, baseline_max_lambda, length = lambda_no)
+    min_lambda <- baseline_min_lambda
+    max_lambda <- baseline_max_lambda
+    coefs <- rep(0, lambda_no)
+    
+    for (l in 1:length(lambdas)) {
+      mixed_lasso <- glmmLasso(fix = formula,
+                           rnd=list(provid=~1),
+                           data = data,
+                           lambda = lambdas[l],
+                           final.re = TRUE)
+      
+      coefs[l] <- sum(mixed_lasso$coefficients[2:(p + 1)] != 0)
+      print(coefs[l])
+                             
+    }
+    
+    min_lambda <- ifelse(length(which(coefs == p)) == 0, 
+                         baseline_min_lambda,
+                         lambdas[max(which(coefs == p))])
+    max_lambda <- ifelse(length(which(coefs == 0)) == 0,
+                         baseline_max_lambda,
+                         lambdas[min(which(coefs == 0))])
+    return(c(min_lambda, max_lambda))
+}
+```
+
 # Data consolidation process  
 
 In this section, we process the data to get it into a format where each row is a child. 
@@ -113,76 +198,6 @@ y1_teacher_obs <- y1_teacher_obs_raw %>%
 y1_obs <- left_join(y1_child_obs, y1_teacher_obs, by = "classid")
 
 ```
-
-```{r}
-table(y1_teacher_obs$nadult)
-```
-
-
-```{r y2_obs, warning=FALSE, cache=TRUE}
-#Input the Year One long child and teacher observation data 
-y2_child_obs_raw <- read.dta13("y2o_c_long.dta")
-y2_teacher_obs_raw <- read.dta13("y2o_t_long.dta")
-y2_coverpage_obs <- read.dta13("y2o_coverpage.dta")
-
-mean(y2_coverpage_obs$classid %in% y1_coverpage_obs$classid)
-
-#Re-format the child data so that it is one row per child
-y2_child_obs <- y2_child_obs_raw %>%
- mutate(cid = ifelse(cid == "N/A", o_c_uniqueid, cid)) %>%
-  group_by(cid, classid) %>%
-  mutate(nsweeps = n()) %>%
-  mutate_at(vars(o_c_verbal:o_c_focus), as.character) %>% 
-  dplyr::select(c(classid, nsweeps, o_c_verbal:o_c_focus, starts_with("c_m8"))) %>%
-  dummy_cols(select_columns = c("o_c_verbal", "o_c_towhom", "o_c_schedule", "o_c_interaction", "o_c_typetask", "o_c_involvement", "o_c_focus"),
-             remove_selected_columns = TRUE) %>% 
-  group_by(classid, cid) %>%
-  # replaced everything() with nsweeps:last_col()
-  summarize(across(nsweeps:last_col(), ~ mean(.x, na.rm = TRUE))) %>%
-  filter(nsweeps >= 10 ) %>% #THIS IS AN ARBITRARY PARAMETER
-  group_by(classid) %>%
-  mutate(nclass = n()) %>%
-    # ifelse takes care of the case where there is only one student per class
-  mutate(across(starts_with("o_c"), ~ 
-                  (ifelse(get('nclass') == 1, .x, ((sum(.x, na.rm = TRUE) -.x) / 
-                                                     get('nclass')))), .names = 
-                  "{col}_classmean")) %>%
-  mutate(across(starts_with("o_c") & !ends_with("classmean"), ~ 
-                  (ifelse(get('nclass') == 1, 0, sqrt((sum((.x - get(str_c(cur_column(), 
-                                                                           '_classmean')))^2) - 
-                                                         (.x - get(str_c(cur_column(),
-                                                                         '_classmean')))^2) / 
-                                                        get('nclass')))), .names = 
-                  "{col}_classsd")) %>%
-  ungroup
-
-#Re-format the teacher data so that it is one row per class
-y2_teacher_obs <- y2_teacher_obs_raw %>% 
-  dummy_cols(select_columns = c("o_t_verbal_o", "o_t_whom_o", "o_t_schedule_o", 
-                                "o_t_task_o", "o_t_instruct", "o_t_focus_o", 
-                                "o_t_tone_o", "o_t_attention_o", "o_t_es_o"),
-             remove_selected_columns = TRUE) %>% 
-    group_by(classid) %>%
-  summarize(
-    nsweeps = n(),
-    nadult = length(unique(o_t_uniqueid)),
-    across(starts_with(c("o_t_verbal_o", "o_t_whom_o", "o_t_schedule_o", 
-                         "o_t_task_o", "o_t_instruct", "o_t_focus_o", 
-                         "o_t_tone_o", "o_t_attention_o", "o_t_es_o", "m8")),
-            ~ mean(.x, na.rm = TRUE))) %>%
-  dplyr::select(-ends_with("_")) %>% 
-  ungroup
-
-#Extract the caretype from the observation sheet
-## ASK -- what is meant by this?
-
-#Merge teacher and child observations 
-y2_obs <- left_join(y2_child_obs, y2_teacher_obs, by = "classid")
-y2_obs <- y2_obs %>% 
-  rename_at(vars(everything()), ~str_replace_all(., "\\s+", ""))
-
-```
-
 
 Below we now input the child-level outcome data. We focus on the outcomes that Emily suggested, and extract the year 1 and year 2 values for each child and then merge to create a single dataset. 
 
@@ -271,20 +286,8 @@ Notes for simulation:
 - For the teacher, there are 33 `o_t' variables. Obviously, both of these categorical variables will expand by a lot when we use dummy variables and compute the class means and standard deviations.
 - We are going to choose one gain variable to work with, the one that has the most total correlation (so most "representative?") -- should also try to maybe do some PCA? There can be two separate analyses with these methods.
 
-
-
 ```{r}
 gain_ind <- which(startsWith(colnames(outcomes_and_obs_full_y1), "gain"))
-# for (i in gain_ind) {
-#   df_analysis <- outcomes_and_obs_full_y1[!is.na(outcomes_and_obs_full_y1[, i]), ]
-#   print(colnames(outcomes_and_obs_full_y1)[i])
-#   print(cor.test(as.numeric(df_analysis$classid), 
-#      as.numeric(df_analysis[, i])))
-#   test <- chisq.test(table(as.numeric(df_analysis$classid), 
-#                            df_analysis[, i]))
-#   print(test)
-# }
-
 ```
 
 ```{r}
@@ -320,11 +323,6 @@ outcomes_use_y1 <- colnames(outcomes_and_obs_full_y1_largec)[gain_ind][order(dia
 outcomes_and_obs_full_y1 <- outcomes_and_obs_full_y1 %>% 
   mutate_at(vars(c_m8_goal_1:actualtype), replace.na)
 
-# what is o_t_sched_t supposed to be for? replacing with actualtype for now just to run analysis
-
-# replacing all NaNs in hopes that it will fix the model matrix issue
-# originally was o_c_verbal_talk:o_t_sched_t
-
 dim(outcomes_and_obs_full_y1)
 
 ```
@@ -334,6 +332,8 @@ dim(outcomes_and_obs_full_y1)
 
 ```{r}
 # for preliminary empirical results, thesis
+#TODO 2/28: need to figure out why I did this weird standardization thing
+
 outcomes <- colnames(outcomes_and_obs_full_y1[, gain_ind])
 models_y1_use <- list()
 coefficients_model_y1_use <- list()
@@ -342,7 +342,7 @@ for (outcome in outcomes_use_y1) {
   df_analysis <- outcomes_and_obs_full_y1 %>%
     filter(!is.na(outcomes_and_obs_full_y1[[outcome]])) %>%
     # make sure to not use cid, because it's basically just the row number at this point
-    select(-c(other_outcomes, cid))
+    dplyr::select(-c(other_outcomes, cid))
   allSd <- apply(df_analysis[, -1], 2, sd)
   var.names <- colnames(df_analysis)[-c(1, which(colnames(df_analysis) == "provid"))]
   # var.names <- var.names[1:10]
@@ -374,107 +374,13 @@ for (outcome in outcomes_use_y1) {
 ## THESE ARE THE COEFFICIENTS FOR Y1: coefficients_model_y1_use
 ```
 
-
-
-```{r}
-cv_glmmLasso <- function(data, formula, rand=list(j=~1),
-                      lambda_step=20, lambda_min = lambda_min,
-                      lambda_max = lambda_max, folds = 5) {
-  lambdas <- seq(lambda_min, lambda_max, length = lambda_step)
-  
-  N <- dim(data)[1]
-  ind <- sample(N, N)
-  
-  # number of folds
-  
-  kk <- folds
-  nk <- floor(N/kk)
-  
-  pred_error <- matrix(NA, ncol=kk, nrow = lambda_step)
-
-  
-  for (j in 1:lambda_step) {
-    for (i in 1:kk)
-    {
-      if (i < kk) {
-      indi <- ind[(i-1)*nk+(1:nk)]
-      }
-      else {
-      indi <- ind[((i-1)*nk+1):N]
-      }
-  
-    data_train <- data[-indi,]
-    data_test <-data[indi,]
-  
-    glm <- try(glmmLasso(fix = formula, rnd = rand, data = data_train, 
-              lambda = lambdas[j]), silent = TRUE) 
-            
-        if(!inherits(glm, "try-error"))
-        {  
-          y_hat <- predict(glm, data_test)  
-          pred_error[j,i]<- sqrt(sum((data_test$Y - y_hat)^2) / nrow(data_test))
-        }
-        
-        else 
-        {
-          return("error in choosing lambda value")
-        }
-    }
-  }
-  
-  # find lambda which gives lowest prediction error
-  pred_error_vec <- apply(pred_error, 1, sum)
-  return(lambdas[which.min(pred_error_vec)])  
-}
-```
-
-
+# see brainstorming in scratch_data_work.Rmd -- decided on some pre-processing with LASSO 0.1 and then removing columns with pairwise correlation greater than 0.95
 
 ```{r}
-lambda_range <- function(data, formula, p,
-                         baseline_min_lambda = 10^(-2),
-                         baseline_max_lambda = 10^3,
-                         lambda_no = 20) {
-    
-    lambdas <- seq(baseline_min_lambda, baseline_max_lambda, length = lambda_no)
-    min_lambda <- baseline_min_lambda
-    max_lambda <- baseline_max_lambda
-    coefs <- rep(0, lambda_no)
-    
-    for (l in 1:length(lambdas)) {
-      print(l)
-      mixed_lasso <- glmmLasso(fix = formula,
-                           rnd=list(provid=~1),
-                           data = data,
-                           lambda = lambdas[l],
-                           final.re = TRUE)
-      
-      coefs[l] <- sum(mixed_lasso$coefficients[2:(p + 1)] != 0)
-                             
-    }
-    
-    min_lambda <- ifelse(length(which(coefs == p)) == 0, 
-                         baseline_min_lambda,
-                         lambdas[max(which(coefs == p))])
-    max_lambda <- ifelse(length(which(coefs == 0)) == 0,
-                         baseline_max_lambda,
-                         lambdas[min(which(coefs == 0))])
-    return(c(min_lambda, max_lambda))
-}
-```
-
-
-### BEGIN BRAINSTORMING FOR PREPROCESSING
-
-## row 1 on table of notes -- large_c with selection of variables
-
-```{r}
-## trying suggestion of using LASSO with very low regularization parameter
 outcome <- outcomes_use_y1[1]
 other_outcomes <- outcomes[outcomes != outcome]
 
 data_processing <- function(data) {
-  print(outcome)
   df_analysis_noncor <- data %>%
   filter(!is.na(data[[outcome]])) %>%
   dplyr::select(-c(all_of(other_outcomes), caretype, classid, 
@@ -482,7 +388,7 @@ data_processing <- function(data) {
                    actualtype, nsweeps.x)) 
   
   df_analysis_noncor <- as.data.frame(df_analysis_noncor)
-  cor_matrix_largec <- cor(as.matrix(select_if(df_analysis, is.numeric)))
+  cor_matrix <- cor(as.matrix(select_if(df_analysis_noncor, is.numeric)))
   cor_1 <- which(cor_matrix > 0.95, arr.ind = TRUE)
   cor_df <- as.data.frame(cor_1)
   cor_df$variables <- rownames(cor_1)
@@ -496,71 +402,14 @@ data_processing <- function(data) {
 }
 
 df_analysis_largec <- data_processing(outcomes_and_obs_full_y1_largec)
-df_analysis_singleton <- data_processing(outcomes_and_obs_full_y1)
 ```
 
 
-```{r}
-pre_lasso <- function(data, fixed_lambda, mixed_lambdas = seq(0.01, 600, length = 20)) {
-  options(na.action="na.pass")
-  x = model.matrix(as.formula(paste(outcome, "~ . -provid")), 
-                   data = data)
-  
-  y = data[[outcome]]
-  x = x[, -1]
-  
-  model_lasso <- glmnet(x = x, y = y, lambda = fixed_lambda)
-  coefs_for_glm <- coef(model_lasso)
-  coefs_for_glm <- names(coefs_for_glm[coefs_for_glm[, 1] != 0, 1][-1])
-  formula <- as.formula(paste(outcome, "~", paste(coefs_for_glm, 
-                                                collapse = " + ")))
-  predictive_coefs <- list()
-  num_coefs <- list()
-
-  for (i in 1:length(mixed_lambdas)) {
-  mixed_lasso <- glmmLasso(data = data,
-                           fix = formula, 
-                           rnd = list(provid=~1),
-                           lambda = mixed_lambdas[i])
-  relevant_coefficients <- mixed_lasso$coefficients[2:(length(coefs_for_glm) + 1)]
-  predictive_coefs[[i]] <- relevant_coefficients[relevant_coefficients != 0]
-  num_coefs[[i]] <- length(relevant_coefficients)
-  
-  }
-  
-  return(list("coefficients" = predictive_coefs, 
-              "coefficient_number" = num_coefs))
-}
-
-results_01_largec <- pre_lasso(df_analysis_largec, 0.1)
-results_001_largec <- pre_lasso(df_analysis_largec, 0.01)
-
-# results_01_singleton <- pre_lasso(x_singleton, y_singleton, 0.1)
-# results_001_singleton <- pre_lasso(x_singleton, y_singleton, 0.01)
-
-```
-
-
-## row 2 on table of notes -- full data set (including singletons) with selection of variables
+## try 2-fold cross validation to see if this fixes the rank issue
 
 ```{r}
-coefs_non_prelasso <- colnames(df_analysis_largec)[! colnames(df_analysis_largec) %in% c("provid", outcome)]
-formula_non_prelasso <-  as.formula(paste(outcome, "~", paste(coefs_non_prelasso, 
-                                                collapse = " + ")))
-
-glmmLasso(data = df_analysis_largec, fix = formula_non_prelasso, 
-          rnd = list(provid=~1), lambda = 5)
-
-# glmmLasso(data = df_analysis_singleton, fix = formula_non_prelasso,
-#           rnd = list(provid=~1), lambda = 5)
-```
-
-### END BRAINSTORMING FOR PREPROCESSING
-
-## first method -- use the same lambda value that cv.glmnet (fixed) chooses
-
-```{r}
-all_vars <- colnames(df_analysis_largec)[! (colnames(df_analysis_largec) %in% c("provid", outcome))]
+all_vars <- colnames(df_analysis_largec)[! (colnames(df_analysis_largec) %in% 
+                                              c("provid", outcome))]
 options(na.action="na.pass")
 x = model.matrix(as.formula(paste(outcome, "~ . -provid")), 
                  data = df_analysis_largec)
@@ -568,6 +417,7 @@ x = model.matrix(as.formula(paste(outcome, "~ . -provid")),
 y = df_analysis_largec[[outcome]]
 x = x[, -1]
 
+# some preprocessing, running LASSO with low regularization parameter of 0.1
 model_lasso <- glmnet(x = x, y = y, lambda = 0.1)
 coefs_for_glm <- coef(model_lasso)
 coefs_for_glm <- names(coefs_for_glm[coefs_for_glm[, 1] != 0, 1][-1])
@@ -580,10 +430,10 @@ nonzero_coefs_fixed <- which(coefs_fixed != 0)
 nonzero_coefs_fixed <- all_vars[nonzero_coefs_fixed]
 
 
-lambda_range <- lambda_range(df_analysis_largec, length(coefs_for_glm))
+l_range <- lambda_range(df_analysis_largec, formula, length(coefs_for_glm))
 best_lambda <- cv_glmmLasso(df_analysis_largec, formula, rand = list(provid = ~1),
-                            lambda_step = 20, min_lambda = lambda_range[1],
-                            max_lambda = max_lambda)
+                            lambda_step = 20, lambda_min = lambda_range[1],
+                            lambda_max = lambda_range[2], kk = 2)
 mixed_lasso <- glmmLasso(data = df_analysis_largec, fix = formula, 
                          rnd = list(provid=~1), lambda = best_lambda)
 coefs_mixed <- mixed_lasso$coefficients[-1]
@@ -675,7 +525,7 @@ for (outcome in outcomes_use_y1) {
   df_analysis <- outcomes_and_obs_full_y1_largec %>%
     filter(!is.na(outcomes_and_obs_full_y1_largec[[outcome]])) %>%
     # make sure to not use cid, because it's basically just the row number at this point
-    select(-c(other_outcomes, caretype)) %>%
+    dplyr::select(-c(other_outcomes, caretype)) %>%
     mutate_if(is.character, as.numeric) %>%
     mutate_at(vars(provid), factor) %>%
     select(-c("classid", "cid", "nsweeps.y")) %>%

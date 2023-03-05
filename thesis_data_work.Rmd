@@ -297,51 +297,51 @@ other_outcomes <- outcomes[outcomes != outcome]
 
 cv_glmmLasso <- function(data, formula, rand=list(j=~1),
                       lambda_step=20, lambda_min = lambda_min,
-                      lambda_max = lambda_max, kk = 5) {
+                      lambda_max = lambda_max, kk=5) {
   lambdas <- seq(lambda_min, lambda_max, length = lambda_step)
-  # print(lambdas)
-  # 
-  # N <- dim(data)[1]
-  # ind <- sample(N, N)
-  # 
-  # nk <- floor(N/kk)
   
-  BIC <- rep(NA, lambda_step)
+  N <- dim(data)[1]
+  ind <- sample(N, N)
+  
+  # number of folds
+  
+  nk <- floor(N/kk)
+  
+  pred_error <- matrix(NA, ncol=kk, nrow = lambda_step)
 
+  
   for (j in 1:lambda_step) {
-    print("one lambda")
-    # for (i in 1:kk)
-    # {
-    #   print("one fold")
-    #   if (i < kk) {
-    #   indi <- ind[(i-1)*nk+(1:nk)]
-    #   }
-    #   else {
-    #   indi <- ind[((i-1)*nk+1):N]
-    #   }
+    for (i in 1:kk)
+    {
+      if (i < kk) {
+      indi <- ind[(i-1)*nk+(1:nk)]
+      }
+      else {
+      indi <- ind[((i-1)*nk+1):N]
+      }
   
-    # data_train <- data[-indi,]
-    # data_test <- data[indi,]
-    
-    # levels(data_test$provid) <- levels(data_train$provid)
+    data_train <- data[-indi,]
+    data_test <-data[indi,]
   
-    glm <- glmmLasso(fix = formula, rnd = rand, data = data, 
+    glm <- glmmLasso(fix = formula, rnd = rand, data = data_train, 
               lambda = lambdas[j])
-    # return(glm)
-    # print(glm$bic)
-    # BIC[j,i]<- glm$bic
-    
-    BIC[j] <- glm$bic
+            
+        # if(!inherits(glm, "try-error"))
+        # {  
+          y_hat <- predict(glm, data_test)  
+          pred_error[j,i]<- sqrt(sum((data_test$Y - y_hat)^2) / nrow(data_test))
         # }
         
         # else 
         # {
-        #   return("error in choosing lambda value")
+          # return("error in choosing lambda value")
         # }
+    }
   }
   
   # find lambda which gives lowest prediction error
-  return(lambdas[which.min(BIC)])  
+  pred_error_vec <- apply(pred_error, 1, sum)
+  return(lambdas[which.min(pred_error_vec)])  
 }
 ```
 
@@ -461,7 +461,7 @@ data_processing <- function(data, cor_value, method = FALSE) {
     dplyr::select(c(coefs_for_glm, outcome))
   
   # print(c(coefs_for_glm, outcome))
-  
+  print(ncol(df_analysis_noncor))
   print("finished first step")
   
   ### second, delete any columns that are simply a constant (zero SD)
@@ -477,6 +477,7 @@ data_processing <- function(data, cor_value, method = FALSE) {
     dplyr::select(-all_of(zero_sd_cols))
   all_numeric_vars <- colnames(df_analysis_noncor_nonzero)[-1]
   
+  print(ncol(df_analysis_noncor_nonzero))
   print("finished second step")
   
   
@@ -488,6 +489,8 @@ data_processing <- function(data, cor_value, method = FALSE) {
   # print(vars_to_remove)
   df_analysis_lowcor <- df_analysis_noncor_nonzero %>%
     dplyr::select(-high_cor_variables) 
+  
+  print(ncol(df_analysis_lowcor))
   print("finished third step")
   
   
@@ -502,6 +505,7 @@ data_processing <- function(data, cor_value, method = FALSE) {
     dplyr::select(c(all_of(coefs_for_glm), "provid", outcome)) %>%
     dplyr::select(-c(all_of(linear_vars), all_of(zero_sd_cols),
                      all_of(high_cor_variables)))
+  print(ncol(df_analysis_noncor_nonlinear))
   print("finished fourth step")
   
   return(df_analysis_noncor_nonlinear)
@@ -513,12 +517,9 @@ dplyr::select(-c(all_of(other_outcomes), caretype, classid,
                  cid, nsweeps.y,
                  actualtype, nsweeps.x)) %>%
   drop_na()
-df_analysis_largec <- data_processing(raw_full_data,
-                                      cor_value = 0.20)
+df_analysis_largec <- as.data.frame(data_processing(raw_full_data,
+                                      cor_value = 0.95))
 ```
-
-
-
 
 ## try 2-fold cross validation to see if this fixes the rank issue
 
@@ -535,9 +536,10 @@ formula <- as.formula(paste(outcome, "~", paste(coefs_for_glm,
                                               collapse = " + ")))
 
 fixed_lasso <- cv.glmnet(x, y, alpha = 1)
-coefs_fixed <- coef(fixed_lasso, s = fixed_lasso$lambda.min)[-1]
+coefs_fixed <- coef(fixed_lasso, s = fixed_lasso$lambda.min,
+                    type.measure = "deviance")[-1]
 nonzero_coefs_fixed <- which(coefs_fixed != 0)
-nonzero_coefs_fixed <- all_vars[nonzero_coefs_fixed]
+nonzero_coefs_fixed <- coefs_for_glm[nonzero_coefs_fixed]
 
 l_range <- lambda_range(df_analysis_largec, formula, length(coefs_for_glm))
 best_lambda <- cv_glmmLasso(df_analysis_largec, formula,

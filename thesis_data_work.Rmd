@@ -37,90 +37,6 @@ replace.na <- function(var){
 }
 ```
 
-```{r}
-cv_glmmLasso <- function(data, formula, rand=list(j=~1),
-                      lambda_step=20, lambda_min = lambda_min,
-                      lambda_max = lambda_max, kk = 5) {
-  lambdas <- seq(lambda_min, lambda_max, length = lambda_step)
-  
-  N <- dim(data)[1]
-  ind <- sample(N, N)
-  
-  nk <- floor(N/kk)
-  
-  pred_error <- matrix(NA, ncol=kk, nrow = lambda_step)
-
-  
-  for (j in 1:lambda_step) {
-    for (i in 1:kk)
-    {
-      if (i < kk) {
-      indi <- ind[(i-1)*nk+(1:nk)]
-      }
-      else {
-      indi <- ind[((i-1)*nk+1):N]
-      }
-  
-    data_train <- data[-indi,]
-    data_test <-data[indi,]
-  
-    glm <- glmmLasso(fix = formula, rnd = rand, data = data_train, 
-              lambda = lambdas[j])
-            
-        # if(!inherits(glm, "try-error"))
-        # {  
-          y_hat <- predict(glm, data_test)  
-          pred_error[j,i]<- sqrt(sum((data_test$Y - y_hat)^2) / nrow(data_test))
-        # }
-        
-        # else 
-        # {
-        #   return("error in choosing lambda value")
-        # }
-    }
-  }
-  
-  # find lambda which gives lowest prediction error
-  pred_error_vec <- apply(pred_error, 1, sum)
-  return(lambdas[which.min(pred_error_vec)])  
-}
-```
-
-
-
-```{r}
-lambda_range <- function(data, formula, p,
-                         baseline_min_lambda = 10^(-2),
-                         baseline_max_lambda = 10^3,
-                         lambda_no = 20) {
-    
-    lambdas <- seq(baseline_min_lambda, baseline_max_lambda, length = lambda_no)
-    min_lambda <- baseline_min_lambda
-    max_lambda <- baseline_max_lambda
-    coefs <- rep(0, lambda_no)
-    
-    for (l in 1:length(lambdas)) {
-      mixed_lasso <- glmmLasso(fix = formula,
-                           rnd=list(provid=~1),
-                           data = data,
-                           lambda = lambdas[l],
-                           final.re = TRUE)
-      
-      coefs[l] <- sum(mixed_lasso$coefficients[2:(p + 1)] != 0)
-      print(coefs[l])
-                             
-    }
-    
-    min_lambda <- ifelse(length(which(coefs == p)) == 0, 
-                         baseline_min_lambda,
-                         lambdas[max(which(coefs == p))])
-    max_lambda <- ifelse(length(which(coefs == 0)) == 0,
-                         baseline_max_lambda,
-                         lambdas[min(which(coefs == 0))])
-    return(c(min_lambda, max_lambda))
-}
-```
-
 # Data consolidation process  
 
 In this section, we process the data to get it into a format where each row is a child. 
@@ -374,60 +290,247 @@ for (outcome in outcomes_use_y1) {
 ## THESE ARE THE COEFFICIENTS FOR Y1: coefficients_model_y1_use
 ```
 
-# see brainstorming in scratch_data_work.Rmd -- decided on some pre-processing with LASSO 0.1 and then removing columns with pairwise correlation greater than 0.95
 
 ```{r}
 outcome <- outcomes_use_y1[1]
 other_outcomes <- outcomes[outcomes != outcome]
 
-data_processing <- function(data) {
-  df_analysis_noncor <- data %>%
-  filter(!is.na(data[[outcome]])) %>%
-  dplyr::select(-c(all_of(other_outcomes), caretype, classid, 
-                   cid, nsweeps.y,
-                   actualtype, nsweeps.x)) %>%
-  drop_na()
+cv_glmmLasso <- function(data, formula, rand=list(j=~1),
+                      lambda_step=20, lambda_min = lambda_min,
+                      lambda_max = lambda_max, kk = 5) {
+  lambdas <- seq(lambda_min, lambda_max, length = lambda_step)
+  # print(lambdas)
+  # 
+  # N <- dim(data)[1]
+  # ind <- sample(N, N)
+  # 
+  # nk <- floor(N/kk)
   
-  zero_sd <- apply(select_if(df_analysis_noncor, is.numeric), 2, function(x) sd(x) == 0)
-  zero_sd_cols <- colnames(select_if(df_analysis_noncor, is.numeric))[zero_sd]
-  print(zero_sd_cols)
-  df_analysis_noncor <- df_analysis_noncor %>%
-    dplyr::select(-all_of(zero_sd_cols))
+  BIC <- rep(NA, lambda_step)
+
+  for (j in 1:lambda_step) {
+    print("one lambda")
+    # for (i in 1:kk)
+    # {
+    #   print("one fold")
+    #   if (i < kk) {
+    #   indi <- ind[(i-1)*nk+(1:nk)]
+    #   }
+    #   else {
+    #   indi <- ind[((i-1)*nk+1):N]
+    #   }
   
-  df_analysis_noncor <- as.data.frame(df_analysis_noncor)
-  cor_matrix <- cor(as.matrix(select_if(df_analysis_noncor, is.numeric)))
-  cor_1 <- which(cor_matrix > 0.80, arr.ind = TRUE)
+    # data_train <- data[-indi,]
+    # data_test <- data[indi,]
+    
+    # levels(data_test$provid) <- levels(data_train$provid)
+  
+    glm <- glmmLasso(fix = formula, rnd = rand, data = data, 
+              lambda = lambdas[j])
+    # return(glm)
+    # print(glm$bic)
+    # BIC[j,i]<- glm$bic
+    
+    BIC[j] <- glm$bic
+        # }
+        
+        # else 
+        # {
+        #   return("error in choosing lambda value")
+        # }
+  }
+  
+  # find lambda which gives lowest prediction error
+  return(lambdas[which.min(BIC)])  
+}
+```
+
+
+
+```{r}
+lambda_range <- function(data, formula, p,
+                         baseline_min_lambda = 10^(-2),
+                         baseline_max_lambda = 10^3,
+                         lambda_no = 20) {
+    
+    lambdas <- seq(baseline_min_lambda, baseline_max_lambda, length = lambda_no)
+    min_lambda <- baseline_min_lambda
+    max_lambda <- baseline_max_lambda
+    coefs <- rep(0, lambda_no)
+    
+    for (l in 1:length(lambdas)) {
+      print(lambdas[l])
+      mixed_lasso <- glmmLasso(fix = formula,
+                           rnd=list(provid=~1),
+                           data = data,
+                           lambda = lambdas[l],
+                           final.re = TRUE)
+      
+      coefs[l] <- sum(mixed_lasso$coefficients[2:(p + 1)] != 0)
+      print(coefs[l])
+                             
+    }
+    
+    min_lambda <- ifelse(length(which(coefs == p)) == 0, 
+                         baseline_min_lambda,
+                         lambdas[max(which(coefs == p))])
+    max_lambda <- ifelse(length(which(coefs == 0)) == 0,
+                         baseline_max_lambda,
+                         lambdas[min(which(coefs == 0))])
+    return(c(min_lambda, max_lambda))
+}
+```
+
+
+# see brainstorming in scratch_data_work.Rmd -- decided on some pre-processing with LASSO 0.1 and then removing columns with pairwise correlation greater than 0.95
+
+```{r}
+# takes in data frame of "row", "col", "var"
+
+lasso_coefs <- function(raw_data) {
+  
+  all_vars <- colnames(raw_data)[! (colnames(raw_data) 
+                                              %in% c("provid", outcome))]
+  options(na.action="na.pass")
+  x = model.matrix(as.formula(paste(outcome, "~ . -provid")), 
+                   data = raw_data)
+  
+  y = raw_data[[outcome]]
+  x = x[, -1]
+  model_lasso <- glmnet(x = x, y = y, lambda = 0.01)
+  coefs_for_glm <- coef(model_lasso)
+  coefs_for_glm <- names(coefs_for_glm[coefs_for_glm[, 1] != 0, 1][-1])
+  
+  return(coefs_for_glm)
+  
+}
+
+freq_table_helper <- function(high_corr) {
+  freq_table <- as.data.frame(high_corr %>%
+    group_by(row) %>%
+    summarize(count = n()) %>%
+    ungroup())
+  
+  return(freq_table)
+}
+
+cor_matrix_helper <- function(df_analysis_noncor, cor_value) {
+
+  cor_matrix <- cor(as.matrix(df_analysis_noncor))
+  cor_1 <- which(cor_matrix > cor_value, arr.ind = TRUE)
   cor_df <- as.data.frame(cor_1)
   cor_df$variables <- rownames(cor_1)
   rownames(cor_df) <- NULL
-  high_corr <- cor_df[cor_df$row != cor_df$col, "variables"]
-
-  df_analysis <- df_analysis_noncor %>%
-    dplyr::select(-high_corr) %>%
+  high_corr <- unique(cor_df[cor_df$row != cor_df$col, ])
   
-  return(df_analysis)
+  return(high_corr)
+  
 }
 
-df_analysis_largec <- data_processing(outcomes_and_obs_full_y1_largec)
+corr_matrix_processing <- function(df_analysis_noncor, threshold = 8,
+                                   cor_value) {
+  high_corr <- cor_matrix_helper(df_analysis_noncor, cor_value)
+  freq_table <- freq_table_helper(high_corr)
+  
+  while(max(freq_table$count) > threshold)
+  {
+    index_to_eliminate <- which.max(freq_table$count)
+    row_to_eliminate <- freq_table[index_to_eliminate, "row"]
+    high_corr_var <- high_corr[row_to_eliminate, "variables"]
+    # print(high_corr_var)
+    df_analysis_noncor <- df_analysis_noncor %>% 
+      dplyr::select(-high_corr_var)
+    high_corr <- cor_matrix_helper(df_analysis_noncor, cor_value)
+    freq_table <- freq_table_helper(high_corr)
+  }
+  
+  return(high_corr)
+}
+
+# test <- corr_matrix_processing(df_analysis_noncor, cor_value = 0.60)
 ```
+
+
+```{r}
+
+data_processing <- function(data, cor_value, method = FALSE) {
+  ### first, run data through low regularization parameter
+  coefs_for_glm <- lasso_coefs(raw_data = data)
+
+  df_analysis_noncor <- data %>%
+    dplyr::select(c(coefs_for_glm, outcome))
+  
+  # print(c(coefs_for_glm, outcome))
+  
+  print("finished first step")
+  
+  ### second, delete any columns that are simply a constant (zero SD)
+  df_analysis_noncor_numeric <- df_analysis_noncor %>%
+    select_if(is.numeric)
+  
+  zero_sd <- apply(select_if(df_analysis_noncor_numeric, 
+                             is.numeric), 2, function(x) sd(x) == 0 |
+                     sum(x) < 1)
+  zero_sd_cols <- colnames(select_if(df_analysis_noncor_numeric,
+                                     is.numeric))[zero_sd]
+  df_analysis_noncor_nonzero <- df_analysis_noncor_numeric %>%
+    dplyr::select(-all_of(zero_sd_cols))
+  all_numeric_vars <- colnames(df_analysis_noncor_nonzero)[-1]
+  
+  print("finished second step")
+  
+  
+  ## third, remove all data that has high pairwise correlation (defined by 
+  ## correlation value and "threshold")
+  high_corr <- corr_matrix_processing(df_analysis_noncor_nonzero,
+                                      cor_value = cor_value)
+  high_cor_variables <- high_corr$variables
+  # print(vars_to_remove)
+  df_analysis_lowcor <- df_analysis_noncor_nonzero %>%
+    dplyr::select(-high_cor_variables) 
+  print("finished third step")
+  
+  
+  ## finally, remove all columns that create linear combination
+  
+  linear_combos <- findLinearCombos(df_analysis_lowcor)$remove
+  linear_vars <- names(df_analysis_lowcor)[linear_combos]
+  
+  # modify df_analysis_noncor to get final data frame (that includes 
+  # provid, for example)
+  df_analysis_noncor_nonlinear <- data %>%
+    dplyr::select(c(all_of(coefs_for_glm), "provid", outcome)) %>%
+    dplyr::select(-c(all_of(linear_vars), all_of(zero_sd_cols),
+                     all_of(high_cor_variables)))
+  print("finished fourth step")
+  
+  return(df_analysis_noncor_nonlinear)
+}
+
+raw_full_data <- outcomes_and_obs_full_y1_largec %>%
+filter(!is.na(outcomes_and_obs_full_y1_largec[[outcome]])) %>%
+dplyr::select(-c(all_of(other_outcomes), caretype, classid, 
+                 cid, nsweeps.y,
+                 actualtype, nsweeps.x)) %>%
+  drop_na()
+df_analysis_largec <- data_processing(raw_full_data,
+                                      cor_value = 0.20)
+```
+
+
 
 
 ## try 2-fold cross validation to see if this fixes the rank issue
 
 ```{r}
-all_vars <- colnames(df_analysis_largec)[! (colnames(df_analysis_largec) %in% 
-                                              c("provid", outcome))]
-options(na.action="na.pass")
-x = model.matrix(as.formula(paste(outcome, "~ . -provid")), 
-                 data = df_analysis_largec)
 
+x = model.matrix(as.formula(paste(outcome, "~ . -provid")), 
+                   data = df_analysis_largec)
+  
 y = df_analysis_largec[[outcome]]
 x = x[, -1]
 
-# some preprocessing, running LASSO with low regularization parameter of 0.1
-model_lasso <- glmnet(x = x, y = y, lambda = 0.1)
-coefs_for_glm <- coef(model_lasso)
-coefs_for_glm <- names(coefs_for_glm[coefs_for_glm[, 1] != 0, 1][-1])
+coefs_for_glm <- head(colnames(df_analysis_largec), -2)
 formula <- as.formula(paste(outcome, "~", paste(coefs_for_glm, 
                                               collapse = " + ")))
 
@@ -436,11 +539,11 @@ coefs_fixed <- coef(fixed_lasso, s = fixed_lasso$lambda.min)[-1]
 nonzero_coefs_fixed <- which(coefs_fixed != 0)
 nonzero_coefs_fixed <- all_vars[nonzero_coefs_fixed]
 
-# TODO at ghungroo: investigate correlation matrix of train data frame...
 l_range <- lambda_range(df_analysis_largec, formula, length(coefs_for_glm))
-best_lambda <- cv_glmmLasso(df_analysis_largec, formula, rand = list(provid = ~1),
-                            lambda_step = 20, lambda_min = l_range[1],
-                            lambda_max = l_range[2], kk = 2)
+best_lambda <- cv_glmmLasso(df_analysis_largec, formula,
+                            rand = list(provid = ~1),
+                            lambda_step = 5, lambda_min = l_range[1],
+                            lambda_max = l_range[2], kk = 5)
 mixed_lasso <- glmmLasso(data = df_analysis_largec, fix = formula, 
                          rnd = list(provid=~1), lambda = best_lambda)
 coefs_mixed <- mixed_lasso$coefficients[-1]

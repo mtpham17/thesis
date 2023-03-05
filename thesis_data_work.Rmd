@@ -382,6 +382,53 @@ lambda_range <- function(data, formula, p,
 ```
 
 
+
+```{r}
+library(caret)
+perf_metrics <- function(beta_hat, beta_true, y_hat, y_true, default, fixed) {
+  
+  y_rmse <- rmse(y_hat, y_true)
+  
+  beta_rmse <- rmse(beta_hat, beta_true)
+  
+  # rewrite beta values as 0 (less than default / 2) and 1 (greater than default)
+  # anything in between is "indifferent?" can we just have anything greater than 
+  # default / 2 as TRUE?
+  
+  true_beta_categorical <- factor(beta_true > default / 2, 
+                                  levels = levels(factor(c(TRUE, FALSE))))
+  pred_beta_categorical <- factor(beta_hat > default / 2, 
+                                  levels = levels(factor(c(TRUE, FALSE))))
+  
+  cm <- confusionMatrix(pred_beta_categorical, true_beta_categorical,
+                mode = "everything",
+                positive="TRUE")
+  
+  # previously, true positive/negative
+  sensitivity <- unname(cm$byClass["Sensitivity"])
+  specificity <- unname(cm$byClass["Specificity"])
+  precision <- unname(cm$byClass["Precision"])
+  recall <- unname(cm$byClass["Recall"])
+  f <- unname(cm$byClass["F1"])
+  
+  results_list <- list(y_rmse, beta_rmse, sensitivity, specificity, 
+                       precision, recall, f)
+  names <- c("y_rmse", "beta_rmse", "sensitivity", "specificity", 
+             "precision", "recall", "F1")
+  if (fixed) {
+    names(results_list) <- unlist(lapply(names, function(x) paste(x, "_fixed", 
+                                                                  sep = "")))
+  }
+  
+  else {
+    names(results_list) <- unlist(lapply(names, function(x) paste(x, "_mixed", 
+                                                                  sep = "")))
+  }
+  
+  return(results_list)
+}
+```
+
 # see brainstorming in scratch_data_work.Rmd -- decided on some pre-processing with LASSO 0.1 and then removing columns with pairwise correlation greater than 0.95
 
 ```{r}
@@ -535,9 +582,8 @@ coefs_for_glm <- head(colnames(df_analysis_largec), -2)
 formula <- as.formula(paste(outcome, "~", paste(coefs_for_glm, 
                                               collapse = " + ")))
 
-fixed_lasso <- cv.glmnet(x, y, alpha = 1)
-coefs_fixed <- coef(fixed_lasso, s = fixed_lasso$lambda.min,
-                    type.measure = "deviance")[-1]
+fixed_lasso <- cv.glmnet(x, y, alpha = 1, type.measure = "deviance")
+coefs_fixed <- coef(fixed_lasso, s = "lambda.min")[-1]
 nonzero_coefs_fixed <- which(coefs_fixed != 0)
 nonzero_coefs_fixed <- coefs_for_glm[nonzero_coefs_fixed]
 

@@ -340,8 +340,7 @@ analyze <- function(data, p, true_beta, default) {
   model_lasso_fixed <- quiet_fixed_lasso(x = X_fixed, y = data$Y, nfolds = 5, alpha = 1)
   errors_lasso_fixed <- sum(unlist(lapply(model_lasso_fixed[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0)))) 
   model_lasso_fixed <- model_lasso_fixed$result
-  coefficients_fixed <- coef(model_lasso_fixed, s = 
-                               model_lasso_fixed$lambda.min)[2:(length(true_beta) + 1)]
+  coefficients_fixed <- coef(model_lasso_fixed, s = "lambda.min")[2:(length(true_beta) + 1)]
   
   l_range <- quiet_lambda_range(data, p)
   print(l_range)
@@ -572,8 +571,8 @@ file_saving_sim = function(chunkNo, seed, reps,
 ```{r}
 options(warn=-1)
 
-R <- 10
-M_CHUNK <- 5
+R <- 100
+M_CHUNK <- 20
 
 # changed J to 30, and p to 50
 params <- expand.grid(chunkNo = 1:M_CHUNK,
@@ -584,33 +583,15 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       p = 60, 
                       s = 7, 
                       default = 1,
-                      cov_x = -0.0004,
+                      cov_x = -0.0006,
                       scale = 1,
                       base_mean_x = 0,
                       sigma_x = 1,
                       mean_r = 0,
                       sigma_r = 1,
-                      snr = 0.46,
+                      snr = 0.44,
                       mean_noise = 0,
                       sigma_noise = 1)
-
-# params <- expand.grid(chunkNo = 1:M_CHUNK,
-#                       n_bar = 50,
-#                       J = 5,
-#                       alpha = 0.5,
-#                       type = 1:5,
-#                       p = 12,
-#                       s = 4,
-#                       default = 1,
-#                       cov_x = 0.25,
-#                       scale = 1,
-#                       base_mean_x = 0,
-#                       sigma_x = 1,
-#                       mean_r = 0,
-#                       sigma_r = 2,
-#                       snr = seq(0.1, 1.1, by = 0.2),
-#                       mean_noise = 0,
-#                       sigma_noise = 1)
 
 
 params <- params %>% mutate(
@@ -622,7 +603,7 @@ params <- params %>% mutate(
 
 ```{r}
 # sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
-debugging = TRUE
+debugging = FALSE
 sink("/Users/thupham/Desktop/thesis/logs/with_data.txt")
 
 tictoc::tic(paste(R, "iterations one set"))
@@ -727,5 +708,29 @@ write.csv(dataset[[1]], "/n/home04/thupham17/thesis/concat_results/021323_run.cs
 ```{r}
 # results <- assess_performance(prelim_results)
 # write.csv(results, "/n/home04/thupham17/fasrc/results.csv")
+```
+
+
+```{r}
+ vars_to_remove <- rep(NA, nrow(high_corr))
+  pairwise_vars_removed <- rep(NA, nrow(high_corr))
+  for (i in 1:nrow(high_corr)) {
+    if (i == 1) {
+      vars_to_remove[i] <- high_corr[i, "variables"]
+      pairwise_vars_removed[i] <- unique(high_corr[high_corr$row == high_corr[i, "col"], "variables"])
+    }
+
+    else {
+      if (high_corr[i, "variables"] %in% pairwise_vars_removed) {
+        next
+      }
+
+      else {
+        vars_to_remove[i] <- high_corr[i, "variables"]
+        pairwise_vars_removed[i] <- unique(high_corr[high_corr$row == high_corr[i, "col"], "variables"])
+      }
+    }
+  }
+
 ```
 

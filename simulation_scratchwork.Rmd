@@ -535,9 +535,9 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, snr,
                            mean_noise, sigma_noise) 
   {
-    fname = paste0("/Users/thupham/Desktop/thesis/results/sims_with_data/", chunkNo, "_", seed, ".csv")
-    # fname = paste0("/n/home04/thupham17/thesis/results/sims_with_data/",
-    #            chunkNo, "_", seed, ".csv")
+    # fname = paste0("/Users/thupham/Desktop/thesis/results/sims_with_data/", chunkNo, "_", seed, ".csv")
+    fname = paste0("/n/home04/thupham17/thesis/results/sims_with_data/",
+               chunkNo, "_", seed, ".csv")
     res = NA
     if (!file.exists(fname)) {
         res <- safe_run_sim(chunkNo = chunkNo, seed = seed, reps = reps,
@@ -571,8 +571,8 @@ file_saving_sim = function(chunkNo, seed, reps,
 ```{r}
 options(warn=-1)
 
-R <- 100
-M_CHUNK <- 20
+R <- 1000
+M_CHUNK <- 100
 
 # changed J to 30, and p to 50
 params <- expand.grid(chunkNo = 1:M_CHUNK,
@@ -581,7 +581,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       alpha = 1/3, 
                       type = 4, 
                       p = 60, 
-                      s = 7, 
+                      s = 1:10, 
                       default = 1,
                       cov_x = -0.0006,
                       scale = 1,
@@ -589,7 +589,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       sigma_x = 1,
                       mean_r = 0,
                       sigma_r = 1,
-                      snr = 0.44,
+                      snr = seq(0.2, 4.5, by = 0.24),
                       mean_noise = 0,
                       sigma_noise = 1)
 
@@ -602,9 +602,9 @@ params <- params %>% mutate(
 
 
 ```{r}
-# sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
+sink("/n/home04/thupham17/thesis/logs/with_data.txt")
 debugging = FALSE
-sink("/Users/thupham/Desktop/thesis/logs/with_data.txt")
+# sink("/Users/thupham/Desktop/thesis/logs/with_data.txt")
 
 tictoc::tic(paste(R, "iterations one set"))
 
@@ -657,7 +657,7 @@ concat_files <- function(pathname) {
 
 ```{r}
 # source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
-pathname <- "/n/home04/thupham17/thesis/results/021323_run"
+pathname <- "/n/home04/thupham17/thesis/results/sims_with_data"
 # pathname <- "/Users/thupham/Desktop/thesis/results"
 if (TRUE) {
     # Run in parallel
@@ -678,7 +678,7 @@ if (TRUE) {
   dataset <- pmap(pathname, .f = concat_files)
 }
 
-write.csv(dataset[[1]], "/n/home04/thupham17/thesis/concat_results/021323_run.csv")
+write.csv(dataset[[1]], "/n/home04/thupham17/thesis/concat_results/with_data_run.csv")
 ```
 
 

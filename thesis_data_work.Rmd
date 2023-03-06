@@ -329,7 +329,8 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
         # if(!inherits(glm, "try-error"))
         # {  
           y_hat <- predict(glm, data_test)  
-          pred_error[j,i]<- sqrt(sum((data_test$Y - y_hat)^2) / nrow(data_test))
+          pred_error[j,i]<- sqrt(sum((data_test[outcome] - 
+                                        y_hat)^2) / nrow(data_test))
         # }
         
         # else 
@@ -341,6 +342,7 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
   
   # find lambda which gives lowest prediction error
   pred_error_vec <- apply(pred_error, 1, sum)
+  print(pred_error_vec)
   return(lambdas[which.min(pred_error_vec)])  
 }
 ```
@@ -597,6 +599,9 @@ mixed_lasso <- glmmLasso(data = df_analysis_largec, fix = formula,
 coefs_mixed <- mixed_lasso$coefficients[-1]
 nonzero_coefs_mixed <- names(coefs_mixed[coefs_mixed != 0])
 
+agreement <- sum((coefs_fixed == 0 & coefs_mixed == 0) | 
+                   (coefs_fixed != 0 & coefs_mixed != 0)) / length(coefs_for_glm)
+
 ```
 
 ## exploring data to understand what kind of simulation to run
@@ -643,7 +648,8 @@ snr <- r2 / (1 - r2)
 # round down to 110?
 
 cor <- cor(as.matrix(select_if(df_analysis, is.numeric)))
-(sum(cor[1, ], na.rm = TRUE) - 1) / 284
+(sum(cor[1, ], na.rm = TRUE) - 1) / ncol(select_if(df_analysis,
+                                                   is.numeric))
 # cov_x = -0.0004
 ```
 

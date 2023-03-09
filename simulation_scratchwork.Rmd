@@ -381,23 +381,18 @@ analyze <- function(data, p, true_beta, default) {
   # "the two models agreed on ___ percent of the covariates" -- agreement defined as they both 
   # deemed a beta as non-zero out of the total significant betas.
   
-  coefficients_fixed <- coefficients_fixed > default / 2
-  coefficients_mixed <- coefficients_mixed > default / 2
+  coefficients_fixed_bool <- coefficients_fixed > default / 2
+  coefficients_mixed_bool <- coefficients_mixed > default / 2
   
-  coefficients_fixed_categorical <- factor(coefficients_fixed, 
-                                           levels = levels(factor(c(TRUE, FALSE))))
-  
-  coefficients_mixed_categorical <- factor(coefficients_mixed, 
-                                         levels = levels(factor(c(TRUE, FALSE))))
-  
-  agreement <- sum((coefficients_fixed & coefficients_mixed) |
-                  (!coefficients_fixed & !coefficients_mixed)) / p
+  agreement <- sum((coefficients_fixed_bool & coefficients_mixed_bool) |
+                  (!coefficients_fixed_bool & !coefficients_mixed_bool)) / p
   
   y_hat_fixed <- predict(model_lasso_fixed, newx = X_fixed, s = model_lasso_fixed$lambda.min)
   y_hat_mixed <- predict(model_lasso_mixed, newx = X_fixed, s = lambda_min)
   
   fixed_results <- perf_metrics(coefficients_fixed, true_beta, y_hat_fixed, data$Y,
                                 default, TRUE)
+  return(fixed_results)
   mixed_results <- perf_metrics(coefficients_mixed, true_beta, y_hat_mixed, data$Y,
                                 default, FALSE)
   
@@ -412,25 +407,26 @@ analyze <- function(data, p, true_beta, default) {
            fixed_results, mixed_results))
 }
 
-# data <- generate_data(n_bar = 3, 
-#                       J = 50,
-#                       alpha = 1/3, 
-#                       type = 4, 
-#                       p = 110, 
-#                       s = 7, 
-#                       default = 1,
-#                       cov_x = -0.0004,
-#                       scale = 1,
-#                       base_mean_x = 0,
-#                       sigma_x = 1,
-#                       mean_r = 0,
-#                       sigma_r = 1,
-#                       snr = 0.46,
-#                       mean_noise = 0,
-#                       sigma_noise = 1)
-# 
-true_beta <- generate_beta(4, 60, 1)
-results <- analyze(test_df, 60, true_beta, 1)
+test_df <- generate_data(n_bar = 3,
+                      J = 232,
+                      alpha = 1/3,
+                      type = 4,
+                      p = 185,
+                      s = 7,
+                      # s = 1:10,
+                      default = 1,
+                      cov_x = -0.0006,
+                      scale = 0.75,
+                      base_mean_x = 0,
+                      sigma_x = 1,
+                      mean_r = 0,
+                      sigma_r = 0.2,
+                      snr = 0.44,
+                      mean_noise = 0,
+                      sigma_noise = 1)
+
+true_beta <- generate_beta(type = 4, p = 185, s = 7)
+results <- analyze(test_df, 185, true_beta, 1)
 
 ```
 
@@ -542,6 +538,8 @@ results <- map(1:reps, ~ one_run(n_bar = n_bar, J = J,
 ```{r}
 # source("pack_simulation_functions.R")
 safe_run_sim = safely(rerun_single_params)
+root <- "/n/home04/thupham17/thesis/"
+# root <- "/Users/thupham/Desktop/thesis/"
 file_saving_sim = function(chunkNo, seed, reps,
                            n_bar, J, alpha,
                            type, p, s, default, cov_x,
@@ -549,8 +547,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, snr,
                            mean_noise, sigma_noise) 
   {
-    # fname = paste0("/Users/thupham/Desktop/thesis/results/with_data_icc/", chunkNo, "_", seed, ".csv")
-    fname = paste0("/n/home04/thupham17/thesis/results/with_data_icc/",
+    fname = paste0(root, "results/with_data_icc/",
                chunkNo, "_", seed, ".csv")
     res = NA
     if (!file.exists(fname)) {
@@ -585,8 +582,8 @@ file_saving_sim = function(chunkNo, seed, reps,
 ```{r}
 options(warn=-1)
 
-R <- 1
-M_CHUNK <- 1
+R <- 1000
+M_CHUNK <- 10
 
 # changed J to 232, and p to 188
 params <- expand.grid(chunkNo = 1:M_CHUNK,
@@ -652,7 +649,7 @@ params <- params %>% mutate(
 ```{r}
 # sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
 debugging = FALSE
-sink("/Users/thupham/Desktop/thesis/logs/with_data_icc.txt")
+sink(paste0(root, "logs/with_data_icc.txt"))
 
 tictoc::tic(paste(R, "iterations one set"))
 
@@ -706,7 +703,7 @@ concat_files <- function(pathname) {
 ```{r}
 # source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
 # pathname <- "/n/home04/thupham17/thesis/results/021323_run"
-pathname <- "/Users/thupham/Desktop/thesis/results/with_data_icc"
+pathname <- paste0(root, "results/with_data_icc")
 if (TRUE) {
     # Run in parallel
     
@@ -726,7 +723,8 @@ if (TRUE) {
   dataset <- pmap(pathname, .f = concat_files)
 }
 
-write.csv(dataset[[1]], "/Users/thupham/Desktop/thesis/concat_results/with_data_icc.cvs")
+write.csv(dataset[[1]], 
+          paste0(root, "concat_results/with_icc.csv"))
 ```
 
 

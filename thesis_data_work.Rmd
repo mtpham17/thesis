@@ -35,7 +35,14 @@ replace.na <- function(var){
   ifelse(is.na(var) | is.nan(var), 
          ifelse(is.factor(var), getmode(var), mean(var, na.rm = TRUE)), var)
 }
+
+rmse <- function(predicted, true) {
+  return(sqrt(sum((predicted - true)^2) / length(predicted)))
+}
+
 ```
+
+
 
 # Data consolidation process  
 
@@ -296,7 +303,7 @@ outcome <- outcomes_use_y1[1]
 other_outcomes <- outcomes[outcomes != outcome]
 
 cv_glmmLasso <- function(data, formula, rand=list(j=~1),
-                      lambda_step=20, lambda_min = lambda_min,
+                      lambda_step=10, lambda_min = lambda_min,
                       lambda_max = lambda_max, kk=5) {
   lambdas <- seq(lambda_min, lambda_max, length = lambda_step)
   
@@ -311,6 +318,7 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
 
   
   for (j in 1:lambda_step) {
+    print("one lambda")
     for (i in 1:kk)
     {
       if (i < kk) {
@@ -329,7 +337,8 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
         # if(!inherits(glm, "try-error"))
         # {  
           y_hat <- predict(glm, data_test)  
-          pred_error[j,i]<- sqrt(sum((data_test$Y - y_hat)^2) / nrow(data_test))
+          pred_error[j,i]<- sqrt(sum((data_test[outcome] - 
+                                        y_hat)^2) / nrow(data_test))
         # }
         
         # else 
@@ -341,6 +350,7 @@ cv_glmmLasso <- function(data, formula, rand=list(j=~1),
   
   # find lambda which gives lowest prediction error
   pred_error_vec <- apply(pred_error, 1, sum)
+  print(pred_error_vec)
   return(lambdas[which.min(pred_error_vec)])  
 }
 ```
@@ -572,7 +582,7 @@ df_analysis_largec <- as.data.frame(data_processing(raw_full_data,
 
 ```{r}
 
-x = model.matrix(as.formula(paste(outcome, "~ . -provid")), 
+x = model.matrix(as.formula(paste(outcome, "~ . - provid")), 
                    data = df_analysis_largec)
   
 y = df_analysis_largec[[outcome]]
@@ -582,7 +592,7 @@ coefs_for_glm <- head(colnames(df_analysis_largec), -2)
 formula <- as.formula(paste(outcome, "~", paste(coefs_for_glm, 
                                               collapse = " + ")))
 
-fixed_lasso <- cv.glmnet(x, y, alpha = 1, type.measure = "deviance")
+fixed_lasso <- cv.glmnet(x = x, y = y, alpha = 1, type.measure = "mse")
 coefs_fixed <- coef(fixed_lasso, s = "lambda.min")[-1]
 nonzero_coefs_fixed <- which(coefs_fixed != 0)
 nonzero_coefs_fixed <- coefs_for_glm[nonzero_coefs_fixed]
@@ -590,12 +600,15 @@ nonzero_coefs_fixed <- coefs_for_glm[nonzero_coefs_fixed]
 l_range <- lambda_range(df_analysis_largec, formula, length(coefs_for_glm))
 best_lambda <- cv_glmmLasso(df_analysis_largec, formula,
                             rand = list(provid = ~1),
-                            lambda_step = 5, lambda_min = l_range[1],
+                            lambda_step = 20, lambda_min = l_range[1],
                             lambda_max = l_range[2], kk = 5)
 mixed_lasso <- glmmLasso(data = df_analysis_largec, fix = formula, 
                          rnd = list(provid=~1), lambda = best_lambda)
 coefs_mixed <- mixed_lasso$coefficients[-1]
 nonzero_coefs_mixed <- names(coefs_mixed[coefs_mixed != 0])
+
+agreement <- sum((coefs_fixed == 0 & coefs_mixed == 0) | 
+                   (coefs_fixed != 0 & coefs_mixed != 0)) / length(coefs_for_glm)
 
 ```
 
@@ -643,7 +656,8 @@ snr <- r2 / (1 - r2)
 # round down to 110?
 
 cor <- cor(as.matrix(select_if(df_analysis, is.numeric)))
-(sum(cor[1, ], na.rm = TRUE) - 1) / 284
+(sum(cor[1, ], na.rm = TRUE) - 1) / ncol(select_if(df_analysis,
+                                                   is.numeric))
 # cov_x = -0.0004
 ```
 

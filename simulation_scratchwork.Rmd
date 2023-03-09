@@ -174,7 +174,7 @@ generate_data <- function(n_bar, J, alpha,
   stopifnot(alpha < 1)
   stopifnot(type %in% 1:4)
   stopifnot(p > 1)
-  stopifnot(s > 1)
+  stopifnot(s >= 1)
   stopifnot(snr > 0)
   
   # generate sizes of each cluster 
@@ -224,12 +224,22 @@ generate_data <- function(n_bar, J, alpha,
   return(data)
 }
 
-test_df <- generate_data(n_bar = 50, J = 4, alpha = 0.8,
-  type = 1, p = 10, s = 3, default = 1,
-  cov_x = 0.5, scale = 1, base_mean_x = 0, sigma_x = 1,
-  mean_r = 0, sigma_r = 1,
-  snr = 1,
-  mean_noise = 0, sigma_noise = 1)
+test_df <- generate_data(n_bar = 20, 
+                      J = 20,
+                      alpha = 1/3, 
+                      type = 4, 
+                      p = 60, 
+                      s = 1, 
+                      default = 1,
+                      cov_x = -0.0006,
+                      scale = 1,
+                      base_mean_x = 0,
+                      sigma_x = 1,
+                      mean_r = 0,
+                      sigma_r = 1,
+                      snr = 0.20,
+                      mean_noise = 0,
+                      sigma_noise = 1)
 
 ```
 
@@ -416,8 +426,8 @@ analyze <- function(data, p, true_beta, default) {
 #                       mean_noise = 0,
 #                       sigma_noise = 1)
 # 
-# true_beta <- generate_beta(4, 110, 7)
-# results <- analyze(data, 110, true_beta, 1)
+true_beta <- generate_beta(4, 60, 1)
+results <- analyze(test_df, 60, true_beta, 1)
 
 ```
 
@@ -458,6 +468,7 @@ rerun_single_params <- function(chunkNo, seed, reps,
                            mean_r, sigma_r, 
                            snr, mean_noise, sigma_noise) {
   set.seed(seed)
+  print(paste("We are using", s, "strong parameters and an snr of", snr))
 results <- map(1:reps, ~ one_run(n_bar = n_bar, J = J,
                                        alpha = alpha,
                                        type = type, p = p,
@@ -535,9 +546,9 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, snr,
                            mean_noise, sigma_noise) 
   {
-    # fname = paste0("/Users/thupham/Desktop/thesis/results/sims_with_data/", chunkNo, "_", seed, ".csv")
-    fname = paste0("/n/home04/thupham17/thesis/results/sims_with_data/",
-               chunkNo, "_", seed, ".csv")
+    fname = paste0("/Users/thupham/Desktop/thesis/results/sims_with_data/", chunkNo, "_", seed, ".csv")
+    # fname = paste0("/n/home04/thupham17/thesis/results/sims_with_data/",
+    #            chunkNo, "_", seed, ".csv")
     res = NA
     if (!file.exists(fname)) {
         res <- safe_run_sim(chunkNo = chunkNo, seed = seed, reps = reps,
@@ -571,8 +582,8 @@ file_saving_sim = function(chunkNo, seed, reps,
 ```{r}
 options(warn=-1)
 
-R <- 1000
-M_CHUNK <- 100
+R <- 1
+M_CHUNK <- 1
 
 # changed J to 30, and p to 50
 params <- expand.grid(chunkNo = 1:M_CHUNK,
@@ -581,7 +592,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       alpha = 1/3, 
                       type = 4, 
                       p = 60, 
-                      s = 1:10, 
+                      s = 1, 
                       default = 1,
                       cov_x = -0.0006,
                       scale = 1,
@@ -589,7 +600,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       sigma_x = 1,
                       mean_r = 0,
                       sigma_r = 1,
-                      snr = seq(0.2, 4.5, by = 0.24),
+                      snr = seq(0.20, 4.28, 0.24),
                       mean_noise = 0,
                       sigma_noise = 1)
 
@@ -602,9 +613,9 @@ params <- params %>% mutate(
 
 
 ```{r}
-sink("/n/home04/thupham17/thesis/logs/with_data.txt")
+# sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
 debugging = FALSE
-# sink("/Users/thupham/Desktop/thesis/logs/with_data.txt")
+sink("/Users/thupham/Desktop/thesis/logs/with_data.txt")
 
 tictoc::tic(paste(R, "iterations one set"))
 
@@ -615,7 +626,7 @@ if (!debugging) {
   
     plan(multisession, workers = parallel::detectCores() - 2)
     
-    results <- future_pmap(params, .f = file_saving_sim,
+    results <- future_pmap(params, .f = rerun_single_params,
                           .options = furrr_options(seed = NULL),
                           .progress = TRUE)
     
@@ -657,8 +668,8 @@ concat_files <- function(pathname) {
 
 ```{r}
 # source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
-pathname <- "/n/home04/thupham17/thesis/results/sims_with_data"
-# pathname <- "/Users/thupham/Desktop/thesis/results"
+# pathname <- "/n/home04/thupham17/thesis/results/021323_run"
+pathname <- "/Users/thupham/Desktop/thesis/results/sims_with_data_crash"
 if (TRUE) {
     # Run in parallel
     
@@ -678,7 +689,7 @@ if (TRUE) {
   dataset <- pmap(pathname, .f = concat_files)
 }
 
-write.csv(dataset[[1]], "/n/home04/thupham17/thesis/concat_results/with_data_run.csv")
+write.csv(dataset[[1]], "/Users/thupham/Desktop/thesis/concat_results/crash_data.cvs")
 ```
 
 

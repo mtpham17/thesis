@@ -298,9 +298,10 @@ ggsave("/Users/thupham/Desktop/thesis/plots/agreement_s_2.png")
 ```{r}
 # "tidy F1"
 data_crashed_f1_2 <- collapsed_crash_snr_2 %>%
-  select(snr, mean_F1_fixed, mean_F1_mixed) %>%
+  dplyr::select(snr, mean_F1_fixed, mean_F1_mixed) %>%
   pivot_longer(cols = c(mean_F1_fixed, mean_F1_mixed), values_to = "F1",
                names_to = "effects")
+
 ```
 
 ```{r}
@@ -312,20 +313,26 @@ p <- ggplot(data = data_crashed_f1_2,
   ggtitle("Mean F1 Score vs. Signal-to-Noise Ratio") +
   xlab("Signal-to-Noise Ratio") + 
   ylab("Mean F1 Score") + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = 'bottom') + 
   scale_color_manual(name = "Effects",
                      labels=c('Fixed-Effects LASSO', 'Mixed-Effects LASSO'),
-                      values = c('blue', 'red'))
+                      values = c('olivedrab4', '#f032e6'))
 
 p
 
-ggsave("/Users/thupham/Desktop/thesis/plots/F1_score_2.png", width = 9)
+ggsave("/Users/thupham/Desktop/thesis/plots/F1_score_2.png", width = 5)
+```
+```{r}
+rmse <- data.frame(y_rmse = c(10.8713, 10.535),
+                   effects = factor(c("mixed", "fixed")),
+                   snr = rep(0.46, 2))
 ```
 
 
 ```{r}
 data_crashed_rmse_2 <- collapsed_crash_snr_2 %>%
-  select(snr, mean_y_rmse_mixed, mean_y_rmse_fixed) %>%
+  dplyr::select(snr, mean_y_rmse_mixed, mean_y_rmse_fixed) %>%
   pivot_longer(cols = c(mean_y_rmse_mixed, mean_y_rmse_fixed), 
                values_to = "y_rmse",
                names_to = "effects")
@@ -333,27 +340,43 @@ data_crashed_rmse_2 <- collapsed_crash_snr_2 %>%
 
 
 ```{r}
+width_scale <- 8
+# ratio <- with(data_crashed_rmse_2, diff(range(snr))/diff(range(y_rmse)))
 p <- ggplot(data = data_crashed_rmse_2, 
        mapping = aes(x = snr, y = y_rmse,
                      group = factor(effects),
                      color = factor(effects))) + 
   geom_line() +
+  geom_point(data = rmse, 
+            mapping = aes(x = snr, y = y_rmse,
+                          group = factor(effects), 
+                          color = factor(effects)),
+            size = 3, 
+            alpha = 0.7) + 
   ggtitle("Mean Predicted RMSE vs. Signal-to-Noise Ratio") +
   xlab("Signal-to-Noise Ratio") + 
-  ylab("Mean Y-Hat RMSE") + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
-  scale_color_manual(name = "Effects",
-                     labels=c('Fixed-Effects LASSO', 'Mixed-Effects LASSO'),
-                      values = c('blue', 'red'))
-
+  ylab("Mean Y-Hat RMSE") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = 'bottom',
+        legend.text = element_text(size = 8)) +
+  guides(color = guide_legend(nrow=2,byrow=TRUE)) +
+  scale_color_manual(name = "",
+                     labels=c('Mixed-Effects LASSO on ELS@H', 
+                              'Fixed-Effects LASSO on Simulation',
+                              'Mixed-Effects LASSO on Simulation',
+                              'Fixed-Effects LASSO on ELS@H'),
+                     values = c('red3', 'olivedrab4',
+                                '#f032e6', 'deepskyblue2')) 
+  # coord_fixed(ratio=ratio)
+ 
 p
 
-ggsave("/Users/thupham/Desktop/thesis/plots/rmse_2.png")
+ggsave("/Users/thupham/Desktop/thesis/plots/rmse_2.png", width = 5)
 ```
 
 ```{r}
 data_crashed_beta_rmse_2 <- collapsed_crash_snr_2 %>%
-  select(snr, mean_beta_rmse_mixed, mean_beta_rmse_fixed) %>%
+  dplyr::select(snr, mean_beta_rmse_mixed, mean_beta_rmse_fixed) %>%
   pivot_longer(cols = c(mean_beta_rmse_mixed, mean_beta_rmse_fixed), 
                values_to = "beta_rmse",
                names_to = "effects")
@@ -369,13 +392,14 @@ p <- ggplot(data = data_crashed_beta_rmse_2,
   ggtitle("Mean Beta RMSE vs. Signal-to-Noise Ratio") +
   xlab("Signal-to-Noise Ratio") + 
   ylab("Mean Beta RMSE") + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = 'bottom') + 
   scale_color_manual(name = "Effects",
                      labels=c('Fixed-Effects LASSO', 'Mixed-Effects LASSO'),
-                      values = c('blue', 'red'))
+                      values = c('olivedrab4', '#f032e6'))
 
 p
 
-ggsave("/Users/thupham/Desktop/thesis/plots/beta_rmse_2.png")
+ggsave("/Users/thupham/Desktop/thesis/plots/beta_rmse_2.png", width = 5)
 ```
 

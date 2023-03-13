@@ -22,6 +22,7 @@ library(future)
 library(furrr)
 library(purrr)
 library(misty)
+root <- "/n/home04/thupham17/thesis/"
 ```
 
 
@@ -269,7 +270,7 @@ lambda_range <- function(data, p, baseline_min_lambda = 10^(-2), baseline_max_la
                            final.re = TRUE)
       
       coefs[l] <- sum(mixed_lasso$coefficients[2:(p + 1)] != 0)
-      print(coefs[l])
+      # print(coefs[l])
                              
     }
     min_lambda <- ifelse(length(which(coefs == p)) == 0, 
@@ -282,6 +283,81 @@ lambda_range <- function(data, p, baseline_min_lambda = 10^(-2), baseline_max_la
 }
 
 ```
+
+```{r}
+# find best lambda range for each set of parameters, to avoid running l_range each time
+# set.seed(17)
+# reps <- 20
+# pathname <- paste0(root, "min_lambda/lambda_ranges.csv")
+# 
+# min_lambda_helper <- function(snr) {
+#   one_snr_min <- rep(NA, reps)
+#   one_snr_max <- rep(NA, reps)
+#   for (j in 1:reps) {
+#     test_df <- generate_data(n_bar = 3,
+#                       J = 232,
+#                       alpha = 1/3,
+#                       type = 4,
+#                       p = 185,
+#                       s = 7,
+#                       # s = 1:10,
+#                       default = 1,
+#                       cov_x = 0.01597747,
+#                       scale = 0.75,
+#                       base_mean_x = 0,
+#                       sigma_x = 1,
+#                       mean_r = 0,
+#                       sigma_r = 0.2,
+#                       snr = snr,
+#                       mean_noise = 0,
+#                       sigma_noise = 1)
+#     l_range <- lambda_range(test_df, 185)
+#     print(l_range)
+#     one_snr_min[j] <- l_range[1]
+#     one_snr_max[j] <- l_range[2]
+#     }
+#     df <- data.frame("snr" = snr,
+#                 "lambda_min" = mean(one_snr_min),
+#                 "lambda_max" = mean(one_snr_max))
+#     write.csv(df, paste0(pathname, "_", snr, ".csv"))
+#     return(df)
+# }
+```
+
+```{r}
+# snr_df <- data.frame("snr" = seq(0.14, 4, by = 0.3))
+# # write.csv(dataset[[1]], 
+# #           paste0(root, "min_lambda"))
+# # Run in parallel
+# 
+# plan(multisession, workers = parallel::detectCores() - 2)
+# 
+# dataset <- future_pmap(snr_df, .f = min_lambda_helper,
+#                       .options = furrr_options(seed = NULL),
+#                       .progress = TRUE)
+# 
+# plan(sequential)
+# 
+# # write dataset down here
+```
+
+```{r}
+# data <- read.csv(paste0(root, "min_lambda/", gsub('\\.', '_', 
+#                                                   as.character(min(snr_vec))),
+#                  ".csv"))
+# for (snr in snr_vec[-1]) {
+#   new <- read.csv(paste0(root, "min_lambda/", gsub('\\.', '_', 
+#                                                   as.character(snr)),
+#                          ".csv"))
+#   data <- rbind(data, new)
+# }
+# 
+# data <- data %>%
+#   dplyr::select(-c("X"))
+# write.csv(data, paste0(root, "min_lambdas.csv"))
+```
+
+
 
 ```{r}
 library(caret)
@@ -311,10 +387,12 @@ perf_metrics <- function(beta_hat, beta_true, y_hat, y_true, default, fixed) {
   recall <- unname(cm$byClass["Recall"])
   f <- unname(cm$byClass["F1"])
   
+  s <- sum(beta_hat > default / 2)
+  
   results_list <- list(y_rmse, beta_rmse, sensitivity, specificity, 
-                       precision, recall, f)
+                       precision, recall, f, s)
   names <- c("y_rmse", "beta_rmse", "sensitivity", "specificity", 
-             "precision", "recall", "F1")
+             "precision", "recall", "F1", "s_hat")
   if (fixed) {
     names(results_list) <- unlist(lapply(names, function(x) paste(x, "_fixed", 
                                                                   sep = "")))
@@ -341,7 +419,8 @@ quiet_mixed_lasso <- quietly(glmmLasso)
 
 ```{r}
 # Analyze
-analyze <- function(data, p, true_beta, default) {
+min_lambdas <- read.csv(paste0(root, "min_lambdas.csv"))
+analyze <- function(data, p, true_beta, default, snr) {
   var.names <- paste("X", 1:p, sep = "")
   formula <- as.formula(paste("Y ~", paste(var.names, collapse = " + ")))
   
@@ -353,16 +432,20 @@ analyze <- function(data, p, true_beta, default) {
   model_lasso_fixed <- model_lasso_fixed$result
   coefficients_fixed <- coef(model_lasso_fixed, s = "lambda.min")[2:(length(true_beta) + 1)]
   
-  l_range <- quiet_lambda_range(data, p)
-  print(l_range)
-  errors_lambda_range <- sum(unlist(lapply(l_range[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
-  l_range <- l_range$result
+  # CHANGED 3/13: SPEEDING THIS UP BY LOOKING UP VALUES IN DATA FRAME
+  # l_range <- quiet_lambda_range(data, p)
+  # # print(l_range)
+  # errors_lambda_range <- sum(unlist(lapply(l_range[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
+  # l_range <- l_range$result
+  
+  l_range <- c(min_lambdas[min_lambdas$snr == snr, "lambda_min"],
+               min_lambdas[min_lambdas$snr == snr, "lambda_max"])
   
   best_lambda <- quiet_cv_glmmLasso(data = data,
                              formula = formula,
                              lambda_min = l_range[1], lambda_max =
                                l_range[2])
-  print(best_lambda)
+  # print(best_lambda)
   errors_best_lambda <- sum(unlist(lapply(best_lambda[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
   best_lambda <- best_lambda$result
   
@@ -392,7 +475,6 @@ analyze <- function(data, p, true_beta, default) {
   
   fixed_results <- perf_metrics(coefficients_fixed, true_beta, y_hat_fixed, data$Y,
                                 default, TRUE)
-  return(fixed_results)
   mixed_results <- perf_metrics(coefficients_mixed, true_beta, y_hat_mixed, data$Y,
                                 default, FALSE)
   
@@ -415,7 +497,7 @@ test_df <- generate_data(n_bar = 3,
                       s = 7,
                       # s = 1:10,
                       default = 1,
-                      cov_x = -0.0006,
+                      cov_x = 0.01597747,
                       scale = 0.75,
                       base_mean_x = 0,
                       sigma_x = 1,
@@ -425,9 +507,9 @@ test_df <- generate_data(n_bar = 3,
                       mean_noise = 0,
                       sigma_noise = 1)
 
-true_beta <- generate_beta(type = 4, p = 185, s = 7)
-results <- analyze(test_df, 185, true_beta, 1)
-
+true_betas <- generate_beta(type = 4, p = 185, s = 7)
+results <- analyze(data = test_df, p = 185, true_beta = true_betas,
+                   default = 1, snr = 0.44)
 ```
 
 
@@ -451,7 +533,7 @@ one_run <- function(n_bar, J, alpha,
                     mean_noise = 0, sigma_noise = 1)
   
   fixed_beta <- generate_beta(type, p, s, default)
-  result <- analyze(data, p, fixed_beta, default)
+  result <- analyze(data, p, fixed_beta, default, snr)
   return(result)
 }
 
@@ -467,7 +549,7 @@ rerun_single_params <- function(chunkNo, seed, reps,
                            mean_r, sigma_r, 
                            snr, mean_noise, sigma_noise) {
   set.seed(seed)
-  print(paste("We are using", s, "strong parameters and an snr of", snr))
+  # print(paste("We are using", s, "strong parameters and an snr of", snr))
 results <- map(1:reps, ~ one_run(n_bar = n_bar, J = J,
                                        alpha = alpha,
                                        type = type, p = p,
@@ -538,7 +620,6 @@ results <- map(1:reps, ~ one_run(n_bar = n_bar, J = J,
 ```{r}
 # source("pack_simulation_functions.R")
 safe_run_sim = safely(rerun_single_params)
-root <- "/n/home04/thupham17/thesis/"
 # root <- "/Users/thupham/Desktop/thesis/"
 file_saving_sim = function(chunkNo, seed, reps,
                            n_bar, J, alpha,
@@ -558,7 +639,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r = mean_r, sigma_r = sigma_r, snr = snr, 
                            mean_noise = mean_noise, 
                            sigma_noise = sigma_noise)
-        print(res)
+        # print(res)
         res <- as.data.frame(t(res$result))
         write.csv(res, fname)
     } else {
@@ -582,8 +663,8 @@ file_saving_sim = function(chunkNo, seed, reps,
 ```{r}
 options(warn=-1)
 
-R <- 1000
-M_CHUNK <- 10
+R <- 1
+M_CHUNK <- 1
 
 # changed J to 232, and p to 188
 params <- expand.grid(chunkNo = 1:M_CHUNK,
@@ -601,7 +682,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       sigma_x = 1,
                       mean_r = 0,
                       sigma_r = 0.2,
-                      snr = seq(0.20, 4.28, 0.24),
+                      snr = seq(0.14, 4, 0.3),
                       mean_noise = 0,
                       sigma_noise = 1)
 
@@ -660,7 +741,7 @@ if (!debugging) {
   
     plan(multisession, workers = parallel::detectCores() - 2)
     
-    results <- future_pmap(params, .f = rerun_single_params,
+    results <- future_pmap(params, .f = file_saving_sim,
                           .options = furrr_options(seed = NULL),
                           .progress = TRUE)
     
@@ -692,13 +773,14 @@ concat_files <- function(pathname) {
     # if data already exist, then append it together
     if (exists("dataset")){
       tempory <-read.csv(data, header=TRUE)
-      dataset <-unique(rbind(dataset, tempory))
+      dataset <- rbind(dataset, tempory)
       rm(tempory)
     }
   }
   return(dataset)
 }
 ```
+
 
 ```{r}
 # source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c

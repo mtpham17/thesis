@@ -511,8 +511,10 @@ corr_matrix_processing <- function(df_analysis_noncor, threshold = 8,
 ```{r}
 
 data_processing <- function(data, cor_value, method = FALSE) {
+  print(ncol(data))
   ### first, run data through low regularization parameter
   coefs_for_glm <- lasso_coefs(raw_data = data)
+  print(length(coefs_for_glm))
 
   df_analysis_noncor <- data %>%
     dplyr::select(c(coefs_for_glm, outcome))
@@ -521,19 +523,22 @@ data_processing <- function(data, cor_value, method = FALSE) {
   print(ncol(df_analysis_noncor))
   print("finished first step")
   
+  # df_analysis_noncor_nonzero <- df_analysis_noncor
+  
   ### second, delete any columns that are simply a constant (zero SD)
   df_analysis_noncor_numeric <- df_analysis_noncor %>%
     select_if(is.numeric)
-  
-  zero_sd <- apply(select_if(df_analysis_noncor_numeric, 
+
+  zero_sd <- apply(select_if(df_analysis_noncor_numeric,
                              is.numeric), 2, function(x) sd(x) == 0 |
                      sum(x) < 1)
   zero_sd_cols <- colnames(select_if(df_analysis_noncor_numeric,
                                      is.numeric))[zero_sd]
+  print(zero_sd_cols)
   df_analysis_noncor_nonzero <- df_analysis_noncor_numeric %>%
     dplyr::select(-all_of(zero_sd_cols))
   all_numeric_vars <- colnames(df_analysis_noncor_nonzero)[-1]
-  
+
   print(ncol(df_analysis_noncor_nonzero))
   print("finished second step")
   
@@ -568,8 +573,8 @@ data_processing <- function(data, cor_value, method = FALSE) {
   return(df_analysis_noncor_nonlinear)
 }
 
-raw_full_data <- outcomes_and_obs_full_y1_largec %>%
-filter(!is.na(outcomes_and_obs_full_y1_largec[[outcome]])) %>%
+raw_full_data <- outcomes_and_obs_full_y1 %>%
+filter(!is.na(outcomes_and_obs_full_y1[[outcome]])) %>%
 dplyr::select(-c(all_of(other_outcomes), caretype, classid, 
                  cid, nsweeps.y,
                  actualtype, nsweeps.x)) %>%
@@ -620,9 +625,30 @@ coefs <- summary(lm(as.formula(paste(outcome, "~ . - provid")),
 
 coefs_df <- as.data.frame(coefs)
 
-hist(coefs_df$Estimate)
-hist(coefs_df$Estimate[coefs_df$Estimate < 500 & coefs_df$Estimate > -500])
+p1 <- ggplot(coefs_df, mapping = aes(x = Estimate)) +
+  geom_histogram(color = "black", fill = "#FF9999") +   
+  ggtitle("Histogram of Coefficients from Basic Linear Regression") +
+  ylab("Frequency") + 
+  xlab("Coefficients from Basic Linear Regression") + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+p1
+ggsave("/Users/thupham/Desktop/thesis/plots/linear_reg_coefs.png")
+
+
+  # hist(coefs_df$Estimate)
+
+p2 <- ggplot(coefs_df[coefs_df$Estimate < 20 & coefs_df$Estimate > -20, ],
+             mapping = aes(x = Estimate)) +
+  geom_histogram(color = "black", fill = "#FF9999") +
+  ggtitle("Histogram of Most Coefficients from Basic Linear Regression") +
+  ylab("Frequency") +
+  xlab("Coefficients from Basic Linear Regression (Between -10 and 10)") +
+  theme(plot.title = element_text(hjust = 0.5))
 # looks like beta type 4 with some scaling? default = 50?
+
+p2
+ggsave("/Users/thupham/Desktop/thesis/plots/linear_reg_coefs_zoom.png")
 
 # generate_data(n_bar, J, alpha, 
 #                     type, p, s, default,
@@ -632,12 +658,25 @@ hist(coefs_df$Estimate[coefs_df$Estimate < 500 & coefs_df$Estimate > -500])
 #                     mean_noise = 0, sigma_noise = 1)
 
 clusters <- df_analysis_largec %>% group_by(provid) %>% summarize(n = n()) %>% ungroup()
+
+
+p3 <- ggplot(clusters,
+             mapping = aes(x = n)) +
+  geom_histogram(color = "black", fill = "#FF9999") +
+  ggtitle("Histogram of Size of Clusters") +
+  ylab("Frequency") +
+  xlab("Cluster Size") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p3 
+ggsave("/Users/thupham/Desktop/thesis/plots/cluster_size.png")
+
 nrow(clusters)
 # J = 232 --> let's round this down to 50 for now lol
 mean(clusters$n)
 # n_bar = 3
 var(clusters$n)
-hist(clusters$n[clusters$n < 6])
+var(clusters$n[clusters$n < 6])
 # alpha = 1/3?
 
 ggplot(data = df_analysis_largec, 
@@ -656,7 +695,10 @@ snr <- r2 / (1 - r2)
 # round down to 110?
 
 cor <- cor(as.matrix(select_if(df_analysis, is.numeric)))
-(sum(cor[1, ], na.rm = TRUE) - 1) / ncol(select_if(df_analysis,
+std <- apply(select_if(df_analysis, is.numeric), 2, 
+             function(x) sqrt(var(x)))
+cov <- cor * std * cor
+(sum(cov[1, ], na.rm = TRUE) - 1) / ncol(select_if(df_analysis,
                                                    is.numeric))
 # cov_x = -0.0004
 ```

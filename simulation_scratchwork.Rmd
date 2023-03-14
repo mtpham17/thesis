@@ -22,7 +22,7 @@ library(future)
 library(furrr)
 library(purrr)
 library(misty)
-root <- "/n/home04/thupham17/thesis/"
+root <- "/Users/thupham/Desktop/thesis/"
 snr_vec <- seq(0.05, 6, 0.5)
 ```
 
@@ -224,25 +224,35 @@ generate_data <- function(n_bar, J, alpha,
   
   data$j <- as.factor(rep(1:J, times = sample_size))
   
-  return(data)
+  return(list("data" = data,
+              "betas" = fixed_beta))
 }
 
-# test_df <- generate_data(n_bar = 20, 
-#                       J = 20,
-#                       alpha = 1/3, 
-#                       type = 4, 
-#                       p = 60, 
-#                       s = 1, 
-#                       default = 1,
-#                       cov_x = -0.0006,
-#                       scale = 1,
-#                       base_mean_x = 0,
-#                       sigma_x = 1,
-#                       mean_r = 0,
-#                       sigma_r = 1,
-#                       snr = 0.20,
-#                       mean_noise = 0,
-#                       sigma_noise = 1)
+test_generate <- generate_data(n_bar = 3,
+                      J = 232,
+                      alpha = 1/3,
+                      type = 4,
+                      p = 185,
+                      s = 7,
+                      # s = 1:10,
+                      default = 1,
+                      cov_x = 0.01597747,
+                      scale = 0.75,
+                      base_mean_x = 0,
+                      sigma_x = 1,
+                      mean_r = 0,
+                      sigma_r = 0.2,
+                      snr = 1.34,
+                      # put this back in when done:
+                      # snr = snr_vec,
+                      mean_noise = 0,
+                      sigma_noise = 1)
+
+test_df <- test_generate$data
+test_beta <- test_generate$betas
+test_results <- analyze(data = test_df, p = 185, 
+                        true_beta = test_beta, default = 1,
+                        snr = 1.34)
 
 ```
 
@@ -460,6 +470,7 @@ analyze <- function(data, p, true_beta, default, snr) {
   print(errors_lasso_fixed)
   model_lasso_fixed <- model_lasso_fixed$result
   coefficients_fixed <- coef(model_lasso_fixed, s = "lambda.min")[2:(length(true_beta) + 1)]
+  print(coefficients_fixed)
   
   # CHANGED 3/13: SPEEDING THIS UP BY LOOKING UP VALUES IN DATA FRAME
   # l_range <- quiet_lambda_range(data, p)
@@ -469,12 +480,13 @@ analyze <- function(data, p, true_beta, default, snr) {
   
   l_range <- c(min_lambdas[min_lambdas$snr == snr, "lambda_min"],
                min_lambdas[min_lambdas$snr == snr, "lambda_max"])
+  print(l_range)
   
   best_lambda <- quiet_cv_glmmLasso(data = data,
                              formula = formula,
                              lambda_min = l_range[1], lambda_max =
                                l_range[2])
-  # print(best_lambda)
+  print(best_lambda)
   errors_best_lambda <- sum(unlist(lapply(best_lambda[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
   best_lambda <- best_lambda$result
   
@@ -483,8 +495,8 @@ analyze <- function(data, p, true_beta, default, snr) {
                                          data = data,
                                          lambda=best_lambda,
                                          final.re = TRUE)
+  print(paste("mixed LASSO errors:", model_lasso_mixed[-1]))
   errors_model_lasso_mixed <- sum(unlist(lapply(model_lasso_mixed[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
-  print(paste("mixed LASSO errors:", errors_model_lasso_mixed))
   model_lasso_mixed <- model_lasso_mixed$result
   
   coefficients_mixed <- model_lasso_mixed$coefficients[2:(length(true_beta) + 1)]
@@ -554,14 +566,16 @@ one_run <- function(n_bar, J, alpha,
                     mean_noise = 0, sigma_noise = 1) {
   
   print("starting iteration")
-  data <- generate_data(n_bar, J, alpha, 
+  generate <- generate_data(n_bar, J, alpha, 
                     type, p, s, default,
                     cov_x, scale, base_mean_x = 0, sigma_x = 1, 
                     mean_r = 0, sigma_r, 
                     snr,
                     mean_noise = 0, sigma_noise = 1)
   
-  fixed_beta <- generate_beta(type, p, s, default)
+  data <- generate$data
+  
+  fixed_beta <- generate$betas
   result <- analyze(data, p, fixed_beta, default, snr)
   return(result)
 }
@@ -711,7 +725,9 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       sigma_x = 1,
                       mean_r = 0,
                       sigma_r = 0.2,
-                      snr = snr_vec,
+                      snr = 1.34,
+                      # put this back in when done:
+                      # snr = snr_vec,
                       mean_noise = 0,
                       sigma_noise = 1)
 

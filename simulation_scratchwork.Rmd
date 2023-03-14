@@ -662,8 +662,8 @@ file_saving_sim = function(chunkNo, seed, reps,
 ```{r}
 options(warn=-1)
 
-R <- 1000
-M_CHUNK <- 100
+R <- 1
+M_CHUNK <- 1
 
 # changed J to 232, and p to 188
 params <- expand.grid(chunkNo = 1:M_CHUNK,
@@ -681,7 +681,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       sigma_x = 1,
                       mean_r = 0,
                       sigma_r = 0.2,
-                      snr = seq(0.14, 4, 0.3),
+                      snr = seq(0.05, 6, 0.5),
                       mean_noise = 0,
                       sigma_noise = 1)
 
@@ -729,7 +729,7 @@ params <- params %>% mutate(
 ```{r}
 # sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
 debugging = FALSE
-sink(paste0(root, "logs/with_data_icc.txt"))
+sink(paste0(root, "logs/icc_one_run.txt"))
 
 tictoc::tic(paste(R, "iterations one set"))
 
@@ -784,7 +784,7 @@ concat_files <- function(pathname) {
 ```{r}
 # source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
 # pathname <- "/n/home04/thupham17/thesis/results/021323_run"
-pathname <- paste0(root, "results/with_data_icc")
+pathname <- paste0(root, "results/with_icc_onerun")
 if (TRUE) {
     # Run in parallel
     

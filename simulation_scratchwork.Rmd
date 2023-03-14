@@ -23,6 +23,7 @@ library(furrr)
 library(purrr)
 library(misty)
 root <- "/Users/thupham/Desktop/thesis/"
+# root <- "/n/home04/thupham17/thesis/"
 snr_vec <- seq(0.05, 6, 0.5)
 ```
 
@@ -568,10 +569,10 @@ one_run <- function(n_bar, J, alpha,
   print("starting iteration")
   generate <- generate_data(n_bar, J, alpha, 
                     type, p, s, default,
-                    cov_x, scale, base_mean_x = 0, sigma_x = 1, 
-                    mean_r = 0, sigma_r, 
+                    cov_x, scale, base_mean_x, sigma_x, 
+                    mean_r, sigma_r, 
                     snr,
-                    mean_noise = 0, sigma_noise = 1)
+                    mean_noise, sigma_noise = 1)
   
   data <- generate$data
   
@@ -725,7 +726,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       sigma_x = 1,
                       mean_r = 0,
                       sigma_r = 0.2,
-                      snr = 1.34,
+                      snr = 1.64,
                       # put this back in when done:
                       # snr = snr_vec,
                       mean_noise = 0,
@@ -734,7 +735,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
 
 params <- params %>% mutate(
     reps = R / M_CHUNK,
-    seed = 17 + 1:n()
+    seed = 18 + 1:n()
 )
 ```
 

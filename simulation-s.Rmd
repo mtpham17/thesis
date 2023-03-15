@@ -22,8 +22,8 @@ library(future)
 library(furrr)
 library(purrr)
 library(misty)
-root <- "/Users/thupham/Desktop/thesis/"
-# root <- "/n/home04/thupham17/thesis/"
+# root <- "/Users/thupham/Desktop/thesis/"
+root <- "/n/home04/thupham17/thesis/"
 snr_vec <- seq(0.05, 6, 0.5)
 ```
 
@@ -381,7 +381,7 @@ for (scale in scale_vec[-1]) {
 
 data <- data %>%
   dplyr::select(-c("X"))
-write.csv(data, paste0(root, "min_lambdas_scale.csv"))
+write.csv(scale_df, paste0(root, "min_lambdas_scale.csv"))
 ```
 
 

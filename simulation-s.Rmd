@@ -22,8 +22,8 @@ library(future)
 library(furrr)
 library(purrr)
 library(misty)
-# root <- "/Users/thupham/Desktop/thesis/"
-root <- "/n/home04/thupham17/thesis/"
+root <- "/Users/thupham/Desktop/thesis/"
+# root <- "/n/home04/thupham17/thesis/"
 snr_vec <- seq(0.05, 6, 0.5)
 ```
 
@@ -318,104 +318,71 @@ lambda_range_2 <- function(snr) {
 
 ```{r}
 # find best lambda range for each set of parameters, to avoid running l_range each time
-# set.seed(17)
-# reps <- 20
-# pathname <- paste0(root, "min_lambda_2/")
-# 
-# min_lambda_helper <- function(snr) {
-#   one_snr_min <- rep(NA, reps)
-#   one_snr_max <- rep(NA, reps)
-#   for (j in 1:reps) {
-#     test_df <- generate_data(n_bar = 3,
-#                       J = 232,
-#                       alpha = 1/3,
-#                       type = 4,
-#                       p = 185,
-#                       s = 7,
-#                       # s = 1:10,
-#                       default = 1,
-#                       cov_x = 0.01597747,
-#                       scale = 0.75,
-#                       base_mean_x = 0,
-#                       sigma_x = 1,
-#                       mean_r = 0,
-#                       sigma_r = 0.2,
-#                       snr = snr,
-#                       mean_noise = 0,
-#                       sigma_noise = 1)
-#     l_range <- lambda_range(test_df, 185)
-#     print(l_range)
-#     one_snr_min[j] <- l_range[1]
-#     one_snr_max[j] <- l_range[2]
-#     }
-#     df <- data.frame("snr" = snr,
-#                 "lambda_min" = mean(one_snr_min),
-#                 "lambda_max" = mean(one_snr_max))
-#     write.csv(df, paste0(pathname, snr, ".csv"))
-#     return(df)
-# }
-# 
-# snr_df <- data.frame("snr" = snr_vec)
-# # write.csv(dataset[[1]],
-# #           paste0(root, "min_lambda"))
-# # Run in parallel
-# 
-# plan(multisession, workers = parallel::detectCores() - 2)
-# 
-# dataset <- future_pmap(snr_df, .f = min_lambda_helper,
-#                       .options = furrr_options(seed = NULL),
-#                       .progress = TRUE)
-# 
-# plan(sequential)
-# 
-# data <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
-#                                                   as.character(min(snr_vec))),
-#                  ".csv"))
-# for (snr in snr_vec[-1]) {
-#   new <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
-#                                                   as.character(snr)),
-#                          ".csv"))
-#   data <- rbind(data, new)
-# }
-# 
-# data <- data %>%
-#   dplyr::select(-c("X"))
-# write.csv(data, paste0(root, "min_lambdas_2.csv"))
+set.seed(17)
+reps <- 20
+pathname <- paste0(root, "min_lambda_scale/")
+
+min_lambda_helper <- function(scale) {
+  one_scale_min <- rep(NA, reps)
+  one_scale_max <- rep(NA, reps)
+  for (j in 1:reps) {
+    test_df <- generate_data(n_bar = 3,
+                      # J = 232,
+                      J = 168,
+                      alpha = 1/3,
+                      type = 4,
+                      p = 185,
+                      # s = 7,
+                      s = 81,
+                      # s = 1:10,
+                      default = 1,
+                      cov_x = 0.05576108,
+                      # cov_x = 0.01597747,
+                      scale = scale,
+                      base_mean_x = 0,
+                      sigma_x = 1,
+                      mean_r = 0,
+                      sigma_r = 0.2,
+                      snr = 1.28,
+                      # put this back in when done:
+                      # snr = snr_vec,
+                      mean_noise = 0,
+                      sigma_noise = 1)
+    l_range <- lambda_range(test_df$data, test_df$p)
+    print(l_range)
+    one_scale_min[j] <- l_range[1]
+    one_scale_max[j] <- l_range[2]
+    }
+    df <- data.frame("scale" = scale,
+                "lambda_min" = mean(one_scale_min),
+                "lambda_max" = mean(one_scale_max))
+    write.csv(df, paste0(pathname, scale, ".csv"))
+    return(df)
+}
+
+scale_df <- data.frame("scale" = c(0, 1, 2, 3, 4, 5, 6))
+# write.csv(dataset[[1]],
+#           paste0(root, "min_lambda"))
+# Run in parallel
+
+plan(multisession, workers = parallel::detectCores() - 2)
+
+scale_df$res <- future_pmap(scale_df, .f = min_lambda_helper,
+                      .options = furrr_options(seed = NULL),
+                      .progress = TRUE)
+
+plan(sequential)
+
+data <- read.csv(paste0(root, "min_lambda_scale/1.csv"))
+for (scale in scale_vec[-1]) {
+  new <- read.csv(paste0(root, "min_lambda_scale/", scale, ".csv"))
+  data <- rbind(data, new)
+}
+
+data <- data %>%
+  dplyr::select(-c("X"))
+write.csv(data, paste0(root, "min_lambdas_scale.csv"))
 ```
-
-```{r}
-# snr_df <- data.frame("snr" = snr_vec)
-# # write.csv(dataset[[1]],
-# #           paste0(root, "min_lambda"))
-# # Run in parallel
-# 
-# plan(multisession, workers = parallel::detectCores() - 2)
-# 
-# dataset <- future_pmap(snr_df, .f = min_lambda_helper,
-#                       .options = furrr_options(seed = NULL),
-#                       .progress = TRUE)
-# 
-# plan(sequential)
-
-# write dataset down here
-```
-
-```{r}
-# data <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
-#                                                   as.character(min(snr_vec))),
-#                  ".csv"))
-# for (snr in snr_vec[-1]) {
-#   new <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
-#                                                   as.character(snr)),
-#                          ".csv"))
-#   data <- rbind(data, new)
-# }
-# 
-# data <- data %>%
-#   dplyr::select(-c("X"))
-# write.csv(data, paste0(root, "min_lambdas_2.csv"))
-```
-
 
 
 ```{r}

@@ -22,8 +22,8 @@ library(future)
 library(furrr)
 library(purrr)
 library(misty)
-root <- "/Users/thupham/Desktop/thesis/"
-# root <- "/n/home04/thupham17/thesis/"
+# root <- "/Users/thupham/Desktop/thesis/"
+root <- "/n/home04/thupham17/thesis/"
 snr_vec <- seq(0.05, 6, 0.5)
 ```
 
@@ -39,6 +39,7 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 cv_glmmLasso <- function(data, formula, rand=list(j=~1),
                       lambda_step=20, lambda_min = lambda_min,
                       lambda_max = lambda_max, kk=5) {
+  return(lambda_min)
   lambdas <- seq(lambda_min, lambda_max, length = lambda_step)
   
   N <- dim(data)[1]
@@ -224,9 +225,14 @@ generate_data <- function(n_bar, J, alpha,
   data$Y = data$Y + k*epsilon 
   
   data$j <- as.factor(rep(1:J, times = sample_size))
+
+  
   
   return(list("data" = data,
-              "betas" = fixed_beta))
+              "betas" = fixed_beta,
+              "snr" = snr,
+              "default" = default,
+              "p" = p))
 }
 
 test_generate <- generate_data(n_bar = 3,
@@ -249,11 +255,11 @@ test_generate <- generate_data(n_bar = 3,
                       mean_noise = 0,
                       sigma_noise = 1)
 
-test_df <- test_generate$data
-test_beta <- test_generate$betas
-test_results <- analyze(data = test_df, p = 185, 
-                        true_beta = test_beta, default = 1,
-                        snr = 1.34)
+# test_df <- test_generate$data
+# test_beta <- test_generate$betas
+# test_results <- analyze(data = test_generate$data, p = test_generate$p,
+#                         true_beta = test_generate$betas, default = test_generate$default,
+#                         snr = test_generate$snr)
 
 ```
 
@@ -296,104 +302,118 @@ lambda_range <- function(data, p, baseline_min_lambda = 10^(-2), baseline_max_la
 
 ```
 
+
 ```{r}
-# find best lambda range for each set of parameters, to avoid running l_range each time
-set.seed(17)
-reps <- 20
-pathname <- paste0(root, "min_lambda_2/")
-
-min_lambda_helper <- function(snr) {
-  one_snr_min <- rep(NA, reps)
-  one_snr_max <- rep(NA, reps)
-  for (j in 1:reps) {
-    test_df <- generate_data(n_bar = 3,
-                      J = 232,
-                      alpha = 1/3,
-                      type = 4,
-                      p = 185,
-                      s = 7,
-                      # s = 1:10,
-                      default = 1,
-                      cov_x = 0.01597747,
-                      scale = 0.75,
-                      base_mean_x = 0,
-                      sigma_x = 1,
-                      mean_r = 0,
-                      sigma_r = 0.2,
-                      snr = snr,
-                      mean_noise = 0,
-                      sigma_noise = 1)
-    l_range <- lambda_range(test_df, 185)
-    print(l_range)
-    one_snr_min[j] <- l_range[1]
-    one_snr_max[j] <- l_range[2]
-    }
-    df <- data.frame("snr" = snr,
-                "lambda_min" = mean(one_snr_min),
-                "lambda_max" = mean(one_snr_max))
-    write.csv(df, paste0(pathname, snr, ".csv"))
-    return(df)
+lambda_range_2 <- function(snr) {
+  min_lambdas <- c(0.010000, 0.010000, 2.641553, 0.010000, 0.010000, 0.010000, 0.010000,
+                   0.010000, 0.010000, 0.010000, 0.010000, 0.010000, 0.010000)
+  max_lambdas <- c(973.6845, 855.2646, 847.3699, 850.0015, 797.3704, 844.7384, 773.6865, 
+                   771.0549, 797.3704, 784.2127, 805.2651, 786.8442, 792.1073)
+  snr_vec <- c(0.14, 0.44, 0.74, 1.04, 1.34, 1.64, 1.94, 2.24, 2.54, 2.84, 3.14, 3.44, 3.74)
+  index <- unlist(lapply(snr_vec, function(x) all.equal(x, snr))) == TRUE
+  return(c(min_lambdas[index],
+           max_lambdas[index]))
 }
-
-snr_df <- data.frame("snr" = snr_vec)
-# write.csv(dataset[[1]],
-#           paste0(root, "min_lambda"))
-# Run in parallel
-
-plan(multisession, workers = parallel::detectCores() - 2)
-
-dataset <- future_pmap(snr_df, .f = min_lambda_helper,
-                      .options = furrr_options(seed = NULL),
-                      .progress = TRUE)
-
-plan(sequential)
-
-data <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
-                                                  as.character(min(snr_vec))),
-                 ".csv"))
-for (snr in snr_vec[-1]) {
-  new <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
-                                                  as.character(snr)),
-                         ".csv"))
-  data <- rbind(data, new)
-}
-
-data <- data %>%
-  dplyr::select(-c("X"))
-write.csv(data, paste0(root, "min_lambdas_2.csv"))
 ```
 
 ```{r}
-snr_df <- data.frame("snr" = snr_vec)
-# write.csv(dataset[[1]],
-#           paste0(root, "min_lambda"))
-# Run in parallel
+# find best lambda range for each set of parameters, to avoid running l_range each time
+# set.seed(17)
+# reps <- 20
+# pathname <- paste0(root, "min_lambda_2/")
+# 
+# min_lambda_helper <- function(snr) {
+#   one_snr_min <- rep(NA, reps)
+#   one_snr_max <- rep(NA, reps)
+#   for (j in 1:reps) {
+#     test_df <- generate_data(n_bar = 3,
+#                       J = 232,
+#                       alpha = 1/3,
+#                       type = 4,
+#                       p = 185,
+#                       s = 7,
+#                       # s = 1:10,
+#                       default = 1,
+#                       cov_x = 0.01597747,
+#                       scale = 0.75,
+#                       base_mean_x = 0,
+#                       sigma_x = 1,
+#                       mean_r = 0,
+#                       sigma_r = 0.2,
+#                       snr = snr,
+#                       mean_noise = 0,
+#                       sigma_noise = 1)
+#     l_range <- lambda_range(test_df, 185)
+#     print(l_range)
+#     one_snr_min[j] <- l_range[1]
+#     one_snr_max[j] <- l_range[2]
+#     }
+#     df <- data.frame("snr" = snr,
+#                 "lambda_min" = mean(one_snr_min),
+#                 "lambda_max" = mean(one_snr_max))
+#     write.csv(df, paste0(pathname, snr, ".csv"))
+#     return(df)
+# }
+# 
+# snr_df <- data.frame("snr" = snr_vec)
+# # write.csv(dataset[[1]],
+# #           paste0(root, "min_lambda"))
+# # Run in parallel
+# 
+# plan(multisession, workers = parallel::detectCores() - 2)
+# 
+# dataset <- future_pmap(snr_df, .f = min_lambda_helper,
+#                       .options = furrr_options(seed = NULL),
+#                       .progress = TRUE)
+# 
+# plan(sequential)
+# 
+# data <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
+#                                                   as.character(min(snr_vec))),
+#                  ".csv"))
+# for (snr in snr_vec[-1]) {
+#   new <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
+#                                                   as.character(snr)),
+#                          ".csv"))
+#   data <- rbind(data, new)
+# }
+# 
+# data <- data %>%
+#   dplyr::select(-c("X"))
+# write.csv(data, paste0(root, "min_lambdas_2.csv"))
+```
 
-plan(multisession, workers = parallel::detectCores() - 2)
-
-dataset <- future_pmap(snr_df, .f = min_lambda_helper,
-                      .options = furrr_options(seed = NULL),
-                      .progress = TRUE)
-
-plan(sequential)
+```{r}
+# snr_df <- data.frame("snr" = snr_vec)
+# # write.csv(dataset[[1]],
+# #           paste0(root, "min_lambda"))
+# # Run in parallel
+# 
+# plan(multisession, workers = parallel::detectCores() - 2)
+# 
+# dataset <- future_pmap(snr_df, .f = min_lambda_helper,
+#                       .options = furrr_options(seed = NULL),
+#                       .progress = TRUE)
+# 
+# plan(sequential)
 
 # write dataset down here
 ```
 
 ```{r}
-data <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
-                                                  as.character(min(snr_vec))),
-                 ".csv"))
-for (snr in snr_vec[-1]) {
-  new <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
-                                                  as.character(snr)),
-                         ".csv"))
-  data <- rbind(data, new)
-}
-
-data <- data %>%
-  dplyr::select(-c("X"))
-write.csv(data, paste0(root, "min_lambdas_2.csv"))
+# data <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
+#                                                   as.character(min(snr_vec))),
+#                  ".csv"))
+# for (snr in snr_vec[-1]) {
+#   new <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
+#                                                   as.character(snr)),
+#                          ".csv"))
+#   data <- rbind(data, new)
+# }
+# 
+# data <- data %>%
+#   dplyr::select(-c("X"))
+# write.csv(data, paste0(root, "min_lambdas_2.csv"))
 ```
 
 
@@ -458,7 +478,6 @@ quiet_mixed_lasso <- quietly(glmmLasso)
 
 ```{r}
 # Analyze
-min_lambdas <- read.csv(paste0(root, "min_lambdas.csv"))
 analyze <- function(data, p, true_beta, default, snr) {
   var.names <- paste("X", 1:p, sep = "")
   formula <- as.formula(paste("Y ~", paste(var.names, collapse = " + ")))
@@ -468,10 +487,10 @@ analyze <- function(data, p, true_beta, default, snr) {
 
   model_lasso_fixed <- quiet_fixed_lasso(x = X_fixed, y = data$Y, nfolds = 5, alpha = 1)
   errors_lasso_fixed <- sum(unlist(lapply(model_lasso_fixed[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0)))) 
-  print(errors_lasso_fixed)
+  # print(errors_lasso_fixed)
   model_lasso_fixed <- model_lasso_fixed$result
   coefficients_fixed <- coef(model_lasso_fixed, s = "lambda.min")[2:(length(true_beta) + 1)]
-  print(coefficients_fixed)
+  # print(coefficients_fixed)
   
   # CHANGED 3/13: SPEEDING THIS UP BY LOOKING UP VALUES IN DATA FRAME
   # l_range <- quiet_lambda_range(data, p)
@@ -479,9 +498,17 @@ analyze <- function(data, p, true_beta, default, snr) {
   # errors_lambda_range <- sum(unlist(lapply(l_range[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
   # l_range <- l_range$result
   
-  l_range <- c(min_lambdas[min_lambdas$snr == snr, "lambda_min"],
-               min_lambdas[min_lambdas$snr == snr, "lambda_max"])
+  print(paste("this is my snr parameter:", snr))
+  # print(snr %in% min_lambdas$snr)
+  # print(class(snr))
+  # print(min_lambdas$snr)
+  # print(class(min_lambdas$snr))
+  # print(min_lambdas[min_lambdas$snr == snr, ])
+  # print(which(min_lambdas$snr == 0.34))
+  l_range <- lambda_range_2(snr)
   print(l_range)
+  # print(l_range[1])
+  # print(l_range[2])
   
   best_lambda <- quiet_cv_glmmLasso(data = data,
                              formula = formula,
@@ -567,17 +594,16 @@ one_run <- function(n_bar, J, alpha,
                     mean_noise = 0, sigma_noise = 1) {
   
   print("starting iteration")
-  generate <- generate_data(n_bar, J, alpha, 
-                    type, p, s, default,
-                    cov_x, scale, base_mean_x, sigma_x, 
-                    mean_r, sigma_r, 
-                    snr,
-                    mean_noise, sigma_noise = 1)
+  generate <- generate_data(n_bar = n_bar, J = J, alpha = alpha, 
+                    type = type, p = p, s = s, default = default,
+                    cov_x = cov_x, scale = scale, base_mean_x = base_mean_x, 
+                    sigma_x = sigma_x, 
+                    mean_r = mean_r, sigma_r = sigma_r, 
+                    snr = snr,
+                    mean_noise = mean_noise, sigma_noise = sigma_noise)
   
-  data <- generate$data
-  
-  fixed_beta <- generate$betas
-  result <- analyze(data, p, fixed_beta, default, snr)
+  result <- analyze(data = generate$data, p = generate$p, true_beta = generate$betas, 
+                    default = generate$default, snr = generate$snr)
   return(result)
 }
 
@@ -631,37 +657,6 @@ results <- map(1:reps, ~ one_run(n_bar = n_bar, J = J,
 
 
 ```{r}
-# set.seed(200)
-# 
-# p <- 110
-# var.names <- paste("X", 1:p, sep = "")
-# formula <- as.formula(paste("Y ~", paste(var.names, collapse = " + ")))
-# 
-# for (i in 1:10) {
-#   data <- generate_data(n_bar = 3, 
-#                      J = 50,
-#                      alpha = 1/3, 
-#                      type = 4, 
-#                      p = 110, 
-#                      s = 7, 
-#                      default = 1,
-#                      cov_x = -0.0004,
-#                      scale = 1,
-#                      base_mean_x = 0,
-#                      sigma_x = 1,
-#                      mean_r = 0,
-#                      sigma_r = 1,
-#                      snr = 0.46,
-#                      mean_noise = 0,
-#                      sigma_noise = 1)
-#   l_range <- lambda_range(data, p) 
-#   cv_glmmLasso(data, formula = formula, lambda_min = l_range[1], lambda_max = l_range[2])
-# }
-```
-
-
-
-```{r}
 # source("pack_simulation_functions.R")
 safe_run_sim = safely(rerun_single_params)
 # root <- "/Users/thupham/Desktop/thesis/"
@@ -672,22 +667,20 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, snr,
                            mean_noise, sigma_noise) 
   {
-    fname = paste0(root, "results/with_data_icc/",
-               chunkNo, "_", seed, ".csv")
+    fname = paste0(root, "results/with_icc_onerun/",
+               chunkNo, "_", seed, ".rds")
     res = NA
     if (!file.exists(fname)) {
         res <- safe_run_sim(chunkNo = chunkNo, seed = seed, reps = reps,
                            n_bar = n_bar, J = J, alpha = alpha,
                            type = type, p = p, s = s, default = default, cov_x = cov_x,
                            scale = scale, base_mean_x = base_mean_x, sigma_x = sigma_x,
-                           mean_r = mean_r, sigma_r = sigma_r, snr = snr, 
-                           mean_noise = mean_noise, 
+                           mean_r = mean_r, sigma_r = sigma_r, snr = snr,
+                           mean_noise = mean_noise,
                            sigma_noise = sigma_noise)
-        # print(res)
-        res <- as.data.frame(t(res$result))
-        write.csv(res, fname)
+        saveRDS(res, fname)
     } else {
-        res = read.csv(file = fname)
+        res = readRDS(file = fname)
     }
     return(res)
 }
@@ -713,20 +706,23 @@ M_CHUNK <- 1
 # changed J to 232, and p to 188
 params <- expand.grid(chunkNo = 1:M_CHUNK,
                       n_bar = 3,
-                      J = 232,
+                      # J = 232,
+                      J = 168,
                       alpha = 1/3,
                       type = 4,
                       p = 185,
-                      s = 7,
+                      # s = 7,
+                      s = 81,
                       # s = 1:10,
                       default = 1,
-                      cov_x = 0.01597747,
+                      cov_x = 0.05576108,
+                      # cov_x = 0.01597747,
                       scale = 0.75,
                       base_mean_x = 0,
                       sigma_x = 1,
                       mean_r = 0,
                       sigma_r = 0.2,
-                      snr = 1.64,
+                      snr = seq(0.14, 4, by = 0.3),
                       # put this back in when done:
                       # snr = snr_vec,
                       mean_noise = 0,
@@ -735,7 +731,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
 
 params <- params %>% mutate(
     reps = R / M_CHUNK,
-    seed = 18 + 1:n()
+    seed = 650 + 1:n()
 )
 ```
 
@@ -778,16 +774,15 @@ params <- params %>% mutate(
 debugging = FALSE
 sink(paste0(root, "logs/icc_one_run.txt"))
 
+params <- sample_n(params, nrow(params))
 tictoc::tic(paste(R, "iterations one set"))
 
 if (!debugging) {
     # Run in parallel
-    
-    library(future)
   
     plan(multisession, workers = parallel::detectCores() - 2)
     
-    results <- future_pmap(params, .f = file_saving_sim,
+    params$res <- future_pmap(params, .f = file_saving_sim,
                           .options = furrr_options(seed = NULL),
                           .progress = TRUE)
     
@@ -834,9 +829,6 @@ concat_files <- function(pathname) {
 pathname <- paste0(root, "results/with_icc_onerun")
 if (TRUE) {
     # Run in parallel
-    
-    library(future)
-    library(furrr)
   
     plan(multisession, workers = parallel::detectCores() - 2)
     
@@ -852,7 +844,7 @@ if (TRUE) {
 }
 
 write.csv(dataset[[1]], 
-          paste0(root, "concat_results/with_icc.csv"))
+          paste0(root, "concat_results/with_icc_onerun.csv"))
 ```
 
 

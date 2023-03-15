@@ -1,0 +1,902 @@
+---
+title: "simulation_scratchwork"
+output: pdf_document
+date: '2023-01-12'
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '/Users/thupham/Desktop/thesis')
+library(readstata13)
+library(tidyverse)
+library(glmnet)
+library(caret)
+library(fastDummies)
+library(mvtnorm)
+library(dplyr)
+library(glmnet)
+library(glmmLasso)
+library(future)
+library(furrr)
+library(purrr)
+library(misty)
+# root <- "/Users/thupham/Desktop/thesis/"
+root <- "/n/home04/thupham17/thesis/"
+snr_vec <- seq(0.05, 6, 0.5)
+```
+
+
+```{r}
+# cross validation helper function for the glmmLasso
+
+library(MASS)
+library(nlme)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+# https://rdrr.io/cran/glmmLasso/src/demo/glmmLasso-soccer.r
+cv_glmmLasso <- function(data, formula, rand=list(j=~1),
+                      lambda_step=20, lambda_min = lambda_min,
+                      lambda_max = lambda_max, kk=5) {
+  return(lambda_min)
+  lambdas <- seq(lambda_min, lambda_max, length = lambda_step)
+  
+  N <- dim(data)[1]
+  ind <- sample(N, N)
+  
+  # number of folds
+  
+  nk <- floor(N/kk)
+  
+  pred_error <- matrix(NA, ncol=kk, nrow = lambda_step)
+
+  
+  for (j in 1:lambda_step) {
+    for (i in 1:kk)
+    {
+      if (i < kk) {
+      indi <- ind[(i-1)*nk+(1:nk)]
+      }
+      else {
+      indi <- ind[((i-1)*nk+1):N]
+      }
+  
+    data_train <- data[-indi,]
+    data_test <-data[indi,]
+  
+    glm <- glmmLasso(fix = formula, rnd = rand, data = data_train, 
+              lambda = lambdas[j])
+            
+        # if(!inherits(glm, "try-error"))
+        # {  
+          y_hat <- predict(glm, data_test)  
+          pred_error[j,i]<- sqrt(sum((data_test$Y - y_hat)^2) / nrow(data_test))
+        # }
+        
+        # else 
+        # {
+          # return("error in choosing lambda value")
+        # }
+    }
+  }
+  
+  # find lambda which gives lowest prediction error
+  pred_error_vec <- apply(pred_error, 1, sum)
+  return(lambdas[which.min(pred_error_vec)])  
+}
+
+## other suggestion (haven't implemented this): run a simulation with a lot of lambdas, get a range of lambdas that we consistently see across these simulations. restrict the range based on those results
+```
+
+```{r}
+# beta generator function, following Trevor Hastie, Robert Tibshirani, Ryan Tibshirani
+
+# type = one of c(1, 2, 3, 5) -- to specify the type of beta vector we will have.
+# p = number of predictors (also the number of betas)
+# s = number of beta's that follow the setup given in the paper
+# default = value that the s components take on
+
+# note 2/24: types 2, 3, 4 actually correspond to types 3, 4, and 5 in the Tibshirani paper.
+
+# beta-type 1: \beta's have s components equal to (default), occurring at (roughly) equal spaced indices between 1 and p, and the rest equal to 0
+# beta-type 2: \beta has its first s components, taking nonzero values equally spaced between 10 and 0.5, and the rest equal to 0
+# added back in beta-type 3 (the Ryan paper excluded it because they got similar results, but I'm running a slightly different simulation): \beta has its first s components, taking nonzero values equally spaced between -10 and 10, and the rest equal to 0 
+# beta-type 4: \beta has its first s components equal to default, and the rest decaying exponentially to 0, specifically \beta_i = (default * 0.5)^{i - s}, for i = s + 1, ..., p
+
+## CHANGED THIS TO DEFAULT AND DEFAULT * 0.5 ON 2/23
+
+generate_beta <- function(type, p, s, default = 1) {
+  if (s > p) {
+    s <- p
+  }
+  
+  if (type == 1) {
+    # create roughly spaced indices, we want s betas to have a value of 1
+    indices <- seq(1, p, length.out = s)
+    betas <- rep(0, p)
+    betas[indices] <- 1
+    return(betas)
+  }
+  
+  if (type == 2) {
+    return(c(seq(-10 * default, 0.5 * default, length.out = s), 
+             rep(0, p - s)))
+  }
+  
+  if (type == 3) {
+    return(c(seq(-10 * default, 10 * default, length.out = s), 
+             rep(0, p - s)))
+
+  }
+  
+  # we add this condition because seq(n, n) gives us one number (instead of an empty
+  # list), and we don't want an extra coefficient
+  if (p == s) {
+    return(c(rep(default, s)))
+  }
+  
+  return(c(rep(default, s), (default * 0.5)^seq(s + 1, p)))
+}
+```
+
+```{r rmse}
+rmse <- function(predicted, true) {
+  return(sqrt(sum((predicted - true)^2) / length(predicted)))
+}
+```
+
+
+```{r sample_size}
+sample_size_gen <- function(n_bar, alpha, J) {
+  n_min <- round(n_bar * (1 - alpha))
+  n_max <- round(n_bar * (1 + alpha))
+  sample_size <- sample(n_min:n_max, J, replace = TRUE)
+  if (n_min == n_max) {
+    sample_size <- rep(n_bar, J)
+  }
+  return(sample_size)
+}
+```
+
+```{r generate_data, warnings=FALSE}
+
+## DESCRIPTION OF INPUTS
+# type, p, s, default are all the arguments that are taken in by generate_beta
+# cov_x = covariance between covariates
+# mean_x = mean of covariates
+# sigma_x = standard deviation of covariate distribution
+# mean_r = mean of random intercepts
+# sigma_r = standard deviation of random intercepts
+
+generate_data <- function(n_bar, J, alpha, 
+                          type, p, s, default,
+                          cov_x, scale, base_mean_x = 0, sigma_x = 1, 
+                          mean_r = 0, sigma_r, 
+                          snr, mean_noise = 0, sigma_noise = 1) {
+  
+  stopifnot(J >= 2)
+  stopifnot(alpha < 1)
+  stopifnot(type %in% 1:4)
+  stopifnot(p > 1)
+  stopifnot(s >= 1)
+  stopifnot(snr > 0)
+  
+  # generate sizes of each cluster 
+  sample_size <- sample_size_gen(n_bar = n_bar, alpha = alpha, J = J)
+  n <- sum(sample_size)
+  
+  colnames_df <- c(paste("X", 1:p, sep = ""), "random_beta") 
+  r_b <- rnorm(n = J, mean = mean_r, sigma_r)
+  random_beta <- rep(r_b, times = sample_size)
+  
+  fixed_beta <- generate_beta(type, p, s, default)
+  fixed_beta <- fixed_beta[order(abs(fixed_beta), decreasing = TRUE)]
+  
+  sigma <- diag(sigma_x^2 - cov_x, p, p) + matrix(cov_x, nrow = p, ncol = p)
+  mean_x <- matrix(rep(scale * random_beta, p), nrow = n, ncol = p)
+  x_all <- rmvnorm(n = n, mean = rep(base_mean_x, p), sigma)
+  
+  # decided to scrap this, and add a whole matrix of means instead (repeated across columns)
+  # Cholesky decomposition to generate correlated covariates
+  # c <- chol(sigma)
+  # x_unc <- replicate(p, rnorm(n, mean_x))
+  # x_all <- x_unc %*% c
+  
+  x_all <- mean_x + x_all
+  measurement_noise <- rmvnorm(n = n, mean = rep(mean_noise, p), 
+                               diag(sigma_noise^2, p, p))
+  noisy_x <- x_all + measurement_noise
+  
+  data <- as.data.frame(cbind(noisy_x, random_beta))
+  colnames(data) <- colnames_df
+  
+  # error term 
+  epsilon <- rnorm(n)
+  
+  # now, relaxing the assumption of how strong our measures are. per Luke's suggestion,
+  # add the noise into the covariates so that we preserve the structure from earlier.
+  
+  data$Y <- rowSums(sweep(x_all, 2, fixed_beta, "*")) + random_beta + epsilon
+  
+  # 02/13/23: adding signal to noise for more insightful graphs
+  
+  k <- sqrt(var(data$Y)/(snr*var(epsilon)))
+  data$Y = data$Y + k*epsilon 
+  
+  data$j <- as.factor(rep(1:J, times = sample_size))
+
+  
+  
+  return(list("data" = data,
+              "betas" = fixed_beta,
+              "snr" = snr,
+              "default" = default,
+              "p" = p))
+}
+
+test_generate <- generate_data(n_bar = 3,
+                      J = 232,
+                      alpha = 1/3,
+                      type = 4,
+                      p = 185,
+                      s = 7,
+                      # s = 1:10,
+                      default = 1,
+                      cov_x = 0.01597747,
+                      scale = 0.75,
+                      base_mean_x = 0,
+                      sigma_x = 1,
+                      mean_r = 0,
+                      sigma_r = 0.2,
+                      snr = 1.34,
+                      # put this back in when done:
+                      # snr = snr_vec,
+                      mean_noise = 0,
+                      sigma_noise = 1)
+
+# test_df <- test_generate$data
+# test_beta <- test_generate$betas
+# test_results <- analyze(data = test_generate$data, p = test_generate$p,
+#                         true_beta = test_generate$betas, default = test_generate$default,
+#                         snr = test_generate$snr)
+
+```
+
+
+```{r}
+# finding range of lambdas to feed into cv_glmmLasso later
+# current rationale is that min lambda should be value of lambda such that no variables are eliminated, and the max lambda is value such that all variables are eliminated
+
+# need to figure out what the baseline values of lambda are 
+lambda_range <- function(data, p, baseline_min_lambda = 10^(-2), baseline_max_lambda = 10^3,
+                         lambda_no = 20) {
+  
+    var.names <- paste("X", 1:p, sep = "")
+    formula <- as.formula(paste("Y ~", paste(var.names, collapse = " + ")))
+    
+    lambdas <- seq(baseline_min_lambda, baseline_max_lambda, length = lambda_no)
+    min_lambda <- baseline_min_lambda
+    max_lambda <- baseline_max_lambda
+    coefs <- rep(0, lambda_no)
+    
+    for (l in 1:length(lambdas)) {
+      mixed_lasso <- glmmLasso(fix = formula,
+                           rnd=list(j=~1),
+                           data = data,
+                           lambda = lambdas[l],
+                           final.re = TRUE)
+      
+      coefs[l] <- sum(mixed_lasso$coefficients[2:(p + 1)] != 0)
+      # print(coefs[l])
+                             
+    }
+    min_lambda <- ifelse(length(which(coefs == p)) == 0, 
+                         baseline_min_lambda,
+                         lambdas[max(which(coefs == p))])
+    max_lambda <- ifelse(length(which(coefs == 0)) == 0,
+                         baseline_max_lambda,
+                         lambdas[min(which(coefs == 0))])
+    return(c(min_lambda, max_lambda))
+}
+
+```
+
+
+```{r}
+lambda_range_2 <- function(snr) {
+  min_lambdas <- c(0.010000, 0.010000, 2.641553, 0.010000, 0.010000, 0.010000, 0.010000,
+                   0.010000, 0.010000, 0.010000, 0.010000, 0.010000, 0.010000)
+  max_lambdas <- c(973.6845, 855.2646, 847.3699, 850.0015, 797.3704, 844.7384, 773.6865, 
+                   771.0549, 797.3704, 784.2127, 805.2651, 786.8442, 792.1073)
+  snr_vec <- c(0.14, 0.44, 0.74, 1.04, 1.34, 1.64, 1.94, 2.24, 2.54, 2.84, 3.14, 3.44, 3.74)
+  index <- unlist(lapply(snr_vec, function(x) all.equal(x, snr))) == TRUE
+  return(c(min_lambdas[index],
+           max_lambdas[index]))
+}
+```
+
+```{r}
+# find best lambda range for each set of parameters, to avoid running l_range each time
+# set.seed(17)
+# reps <- 20
+# pathname <- paste0(root, "min_lambda_2/")
+# 
+# min_lambda_helper <- function(snr) {
+#   one_snr_min <- rep(NA, reps)
+#   one_snr_max <- rep(NA, reps)
+#   for (j in 1:reps) {
+#     test_df <- generate_data(n_bar = 3,
+#                       J = 232,
+#                       alpha = 1/3,
+#                       type = 4,
+#                       p = 185,
+#                       s = 7,
+#                       # s = 1:10,
+#                       default = 1,
+#                       cov_x = 0.01597747,
+#                       scale = 0.75,
+#                       base_mean_x = 0,
+#                       sigma_x = 1,
+#                       mean_r = 0,
+#                       sigma_r = 0.2,
+#                       snr = snr,
+#                       mean_noise = 0,
+#                       sigma_noise = 1)
+#     l_range <- lambda_range(test_df, 185)
+#     print(l_range)
+#     one_snr_min[j] <- l_range[1]
+#     one_snr_max[j] <- l_range[2]
+#     }
+#     df <- data.frame("snr" = snr,
+#                 "lambda_min" = mean(one_snr_min),
+#                 "lambda_max" = mean(one_snr_max))
+#     write.csv(df, paste0(pathname, snr, ".csv"))
+#     return(df)
+# }
+# 
+# snr_df <- data.frame("snr" = snr_vec)
+# # write.csv(dataset[[1]],
+# #           paste0(root, "min_lambda"))
+# # Run in parallel
+# 
+# plan(multisession, workers = parallel::detectCores() - 2)
+# 
+# dataset <- future_pmap(snr_df, .f = min_lambda_helper,
+#                       .options = furrr_options(seed = NULL),
+#                       .progress = TRUE)
+# 
+# plan(sequential)
+# 
+# data <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
+#                                                   as.character(min(snr_vec))),
+#                  ".csv"))
+# for (snr in snr_vec[-1]) {
+#   new <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
+#                                                   as.character(snr)),
+#                          ".csv"))
+#   data <- rbind(data, new)
+# }
+# 
+# data <- data %>%
+#   dplyr::select(-c("X"))
+# write.csv(data, paste0(root, "min_lambdas_2.csv"))
+```
+
+```{r}
+# snr_df <- data.frame("snr" = snr_vec)
+# # write.csv(dataset[[1]],
+# #           paste0(root, "min_lambda"))
+# # Run in parallel
+# 
+# plan(multisession, workers = parallel::detectCores() - 2)
+# 
+# dataset <- future_pmap(snr_df, .f = min_lambda_helper,
+#                       .options = furrr_options(seed = NULL),
+#                       .progress = TRUE)
+# 
+# plan(sequential)
+
+# write dataset down here
+```
+
+```{r}
+# data <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
+#                                                   as.character(min(snr_vec))),
+#                  ".csv"))
+# for (snr in snr_vec[-1]) {
+#   new <- read.csv(paste0(root, "min_lambda_2/", gsub('\\.', '_',
+#                                                   as.character(snr)),
+#                          ".csv"))
+#   data <- rbind(data, new)
+# }
+# 
+# data <- data %>%
+#   dplyr::select(-c("X"))
+# write.csv(data, paste0(root, "min_lambdas_2.csv"))
+```
+
+
+
+```{r}
+library(caret)
+perf_metrics <- function(beta_hat, beta_true, y_hat, y_true, default, fixed) {
+  
+  y_rmse <- rmse(y_hat, y_true)
+  
+  beta_rmse <- rmse(beta_hat, beta_true)
+  
+  # rewrite beta values as 0 (less than default / 2) and 1 (greater than default)
+  # anything in between is "indifferent?" can we just have anything greater than 
+  # default / 2 as TRUE?
+  
+  true_beta_categorical <- factor(beta_true > default / 2, 
+                                  levels = levels(factor(c(TRUE, FALSE))))
+  pred_beta_categorical <- factor(beta_hat > default / 2, 
+                                  levels = levels(factor(c(TRUE, FALSE))))
+  
+  cm <- confusionMatrix(pred_beta_categorical, true_beta_categorical,
+                mode = "everything",
+                positive="TRUE")
+  
+  # previously, true positive/negative
+  sensitivity <- unname(cm$byClass["Sensitivity"])
+  specificity <- unname(cm$byClass["Specificity"])
+  precision <- unname(cm$byClass["Precision"])
+  recall <- unname(cm$byClass["Recall"])
+  f <- unname(cm$byClass["F1"])
+  
+  s <- sum(beta_hat > default / 2)
+  
+  results_list <- list(y_rmse, beta_rmse, sensitivity, specificity, 
+                       precision, recall, f, s)
+  names <- c("y_rmse", "beta_rmse", "sensitivity", "specificity", 
+             "precision", "recall", "F1", "s_hat")
+  if (fixed) {
+    names(results_list) <- unlist(lapply(names, function(x) paste(x, "_fixed", 
+                                                                  sep = "")))
+  }
+  
+  else {
+    names(results_list) <- unlist(lapply(names, function(x) paste(x, "_mixed", 
+                                                                  sep = "")))
+  }
+  
+  return(results_list)
+}
+```
+
+
+```{r}
+# make functions quiet
+quiet_lambda_range <- quietly(lambda_range)
+quiet_cv_glmmLasso <- quietly(cv_glmmLasso)
+quiet_fixed_lasso <- quietly(cv.glmnet)
+quiet_mixed_lasso <- quietly(glmmLasso)
+```
+
+
+```{r}
+# Analyze
+analyze <- function(data, p, true_beta, default, snr) {
+  var.names <- paste("X", 1:p, sep = "")
+  formula <- as.formula(paste("Y ~", paste(var.names, collapse = " + ")))
+  
+  X_fixed <- model.matrix(formula, data = data)
+  X_fixed <- X_fixed[, -1]
+
+  model_lasso_fixed <- quiet_fixed_lasso(x = X_fixed, y = data$Y, nfolds = 5, alpha = 1)
+  errors_lasso_fixed <- sum(unlist(lapply(model_lasso_fixed[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0)))) 
+  # print(errors_lasso_fixed)
+  model_lasso_fixed <- model_lasso_fixed$result
+  coefficients_fixed <- coef(model_lasso_fixed, s = "lambda.min")[2:(length(true_beta) + 1)]
+  # print(coefficients_fixed)
+  
+  # CHANGED 3/13: SPEEDING THIS UP BY LOOKING UP VALUES IN DATA FRAME
+  # l_range <- quiet_lambda_range(data, p)
+  # # print(l_range)
+  # errors_lambda_range <- sum(unlist(lapply(l_range[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
+  # l_range <- l_range$result
+  
+  print(paste("this is my snr parameter:", snr))
+  # print(snr %in% min_lambdas$snr)
+  # print(class(snr))
+  # print(min_lambdas$snr)
+  # print(class(min_lambdas$snr))
+  # print(min_lambdas[min_lambdas$snr == snr, ])
+  # print(which(min_lambdas$snr == 0.34))
+  l_range <- lambda_range_2(snr)
+  print(l_range)
+  # print(l_range[1])
+  # print(l_range[2])
+  
+  best_lambda <- quiet_cv_glmmLasso(data = data,
+                             formula = formula,
+                             lambda_min = l_range[1], lambda_max =
+                               l_range[2])
+  print(best_lambda)
+  errors_best_lambda <- sum(unlist(lapply(best_lambda[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
+  best_lambda <- best_lambda$result
+  
+  model_lasso_mixed <- quiet_mixed_lasso(fix = formula,
+                                         rnd=list(j=~1),
+                                         data = data,
+                                         lambda=best_lambda,
+                                         final.re = TRUE)
+  print(paste("mixed LASSO errors:", model_lasso_mixed[-1]))
+  errors_model_lasso_mixed <- sum(unlist(lapply(model_lasso_mixed[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
+  model_lasso_mixed <- model_lasso_mixed$result
+  
+  coefficients_mixed <- model_lasso_mixed$coefficients[2:(length(true_beta) + 1)]
+
+  basic_linear <- lm(formula, data = data)
+  
+  # "the two models agreed on ___ percent of the covariates" -- agreement defined as they both 
+  # deemed a beta as non-zero out of the total significant betas.
+  
+  coefficients_fixed_bool <- coefficients_fixed > default / 2
+  coefficients_mixed_bool <- coefficients_mixed > default / 2
+  
+  agreement <- sum((coefficients_fixed_bool & coefficients_mixed_bool) |
+                  (!coefficients_fixed_bool & !coefficients_mixed_bool)) / p
+  
+  y_hat_fixed <- predict(model_lasso_fixed, newx = X_fixed, s = model_lasso_fixed$lambda.min)
+  y_hat_mixed <- predict(model_lasso_mixed, newx = X_fixed, s = lambda_min)
+  
+  fixed_results <- perf_metrics(coefficients_fixed, true_beta, y_hat_fixed, data$Y,
+                                default, TRUE)
+  mixed_results <- perf_metrics(coefficients_mixed, true_beta, y_hat_mixed, data$Y,
+                                default, FALSE)
+  
+  errors <- list("errors_fixed_lasso" = errors_lasso_fixed,
+                 "errors_best_lambda" = errors_best_lambda,
+                 "errors_mixed_lasso" = errors_model_lasso_mixed)
+  
+  return(c(list("adj_r_squared" = summary(basic_linear)$adj.r.squared, 
+                "agreement" = agreement,
+                "icc" = multilevel.icc(data$Y, cluster = data$j)), 
+           fixed_results, mixed_results))
+}
+
+# test_df <- generate_data(n_bar = 3,
+#                       J = 232,
+#                       alpha = 1/3,
+#                       type = 4,
+#                       p = 185,
+#                       s = 7,
+#                       # s = 1:10,
+#                       default = 1,
+#                       cov_x = 0.01597747,
+#                       scale = 0.75,
+#                       base_mean_x = 0,
+#                       sigma_x = 1,
+#                       mean_r = 0,
+#                       sigma_r = 0.2,
+#                       snr = 0.44,
+#                       mean_noise = 0,
+#                       sigma_noise = 1)
+# 
+# true_betas <- generate_beta(type = 4, p = 185, s = 7)
+# results <- analyze(data = test_df, p = 185, true_beta = true_betas,
+#                    default = 1, snr = 0.44)
+```
+
+
+
+```{r}
+# Repeat
+
+one_run <- function(n_bar, J, alpha, 
+                    type, p, s, default,
+                    cov_x, scale, base_mean_x = 0, sigma_x = 1, 
+                    mean_r = 0, sigma_r,
+                    snr,
+                    mean_noise = 0, sigma_noise = 1) {
+  
+  print("starting iteration")
+  generate <- generate_data(n_bar = n_bar, J = J, alpha = alpha, 
+                    type = type, p = p, s = s, default = default,
+                    cov_x = cov_x, scale = scale, base_mean_x = base_mean_x, 
+                    sigma_x = sigma_x, 
+                    mean_r = mean_r, sigma_r = sigma_r, 
+                    snr = snr,
+                    mean_noise = mean_noise, sigma_noise = sigma_noise)
+  
+  result <- analyze(data = generate$data, p = generate$p, true_beta = generate$betas, 
+                    default = generate$default, snr = generate$snr)
+  return(result)
+}
+
+# if you keep getting weird results with the simulation, email dataset and short script to groll@statistik.tu-dortmund.de
+```
+
+
+```{r}
+rerun_single_params <- function(chunkNo, seed, reps,
+                           n_bar, J, alpha,
+                           type, p, s, default, cov_x,
+                           scale, base_mean_x, sigma_x,
+                           mean_r, sigma_r, 
+                           snr, mean_noise, sigma_noise) {
+  set.seed(seed)
+  # print(paste("We are using", s, "strong parameters and an snr of", snr))
+results <- map(1:reps, ~ one_run(n_bar = n_bar, J = J,
+                                       alpha = alpha,
+                                       type = type, p = p,
+                                       s = s, default = default,
+                                       cov_x = cov_x, scale = scale,
+                                       base_mean_x = base_mean_x,
+                                       sigma_x = sigma_x,
+                                       mean_r = mean_r, sigma_r = sigma_r,
+                                        snr = snr,
+                                       mean_noise = mean_noise,
+                                       sigma_noise = sigma_noise))
+  
+  results_length <- length(results[[1]])
+  
+  mean_results <- sapply(1:results_length, 
+                         function(j) mean(unlist(lapply(results, function(x) x[j]))))
+  sd_results <- sapply(1:results_length, 
+                         function(j) sd(unlist(lapply(results, function(x) x[j]))))
+  
+  row <- c(chunkNo, seed, reps, n_bar, J, alpha,
+           type, p, s, default, cov_x, scale, base_mean_x, sigma_x,
+           mean_r, sigma_r, snr, mean_noise, sigma_noise, mean_results, sd_results)
+  
+  print(row)
+  
+  names(row) <- c("chunkNo", "seed", "reps", "n_bar", "J", "alpha",
+                  "type", "p", "s", "default", "cov_x", "scale", "base_mean_x", "sigma_x",
+                  "mean_r", "sigma_r", "snr", "mean_noise", "sigma_noise", 
+                  unname(sapply(names(results[[1]]), function(x) paste("mean_", x, sep = ""))),
+                  unname(sapply(names(results[[1]]), function(x) paste("sd_", x, sep = ""))))
+
+  return(row)
+}
+```
+
+
+```{r}
+# source("pack_simulation_functions.R")
+safe_run_sim = safely(rerun_single_params)
+# root <- "/Users/thupham/Desktop/thesis/"
+file_saving_sim = function(chunkNo, seed, reps,
+                           n_bar, J, alpha,
+                           type, p, s, default, cov_x,
+                           scale, base_mean_x, sigma_x,
+                           mean_r, sigma_r, snr,
+                           mean_noise, sigma_noise) 
+  {
+    fname = paste0(root, "results/icc_new_outcome/",
+               chunkNo, "_", seed, ".rds")
+    res = NA
+    if (!file.exists(fname)) {
+        res <- safe_run_sim(chunkNo = chunkNo, seed = seed, reps = reps,
+                           n_bar = n_bar, J = J, alpha = alpha,
+                           type = type, p = p, s = s, default = default, cov_x = cov_x,
+                           scale = scale, base_mean_x = base_mean_x, sigma_x = sigma_x,
+                           mean_r = mean_r, sigma_r = sigma_r, snr = snr,
+                           mean_noise = mean_noise,
+                           sigma_noise = sigma_noise)
+        saveRDS(res, fname)
+    } else {
+        res = readRDS(file = fname)
+    }
+    return(res)
+}
+```
+
+
+## moment of truth
+
+- type 4
+- p = 110
+- s = 7
+- default = 50
+- cov_x = -0.0004
+- scale = 1?
+- snr = 0.46
+
+```{r}
+options(warn=-1)
+
+R <- 1000
+M_CHUNK <- 50
+
+# changed J to 232, and p to 188
+params <- expand.grid(chunkNo = 1:M_CHUNK,
+                      n_bar = 3,
+                      # J = 232,
+                      J = 168,
+                      alpha = 1/3,
+                      type = 4,
+                      p = 185,
+                      # s = 7,
+                      s = 81,
+                      # s = 1:10,
+                      default = 1,
+                      cov_x = 0.05576108,
+                      # cov_x = 0.01597747,
+                      scale = 0.75,
+                      base_mean_x = 0,
+                      sigma_x = 1,
+                      mean_r = 0,
+                      sigma_r = 0.2,
+                      snr = seq(0.14, 4, by = 0.3),
+                      # put this back in when done:
+                      # snr = snr_vec,
+                      mean_noise = 0,
+                      sigma_noise = 1)
+
+
+params <- params %>% mutate(
+    reps = R / M_CHUNK,
+    seed = 17 + 1:n()
+)
+```
+
+
+```{r}
+# snr_vec <- seq(0.20, 4.28, 0.24)
+# icc <- rep(NA, length(snr_vec))
+# for (i in 1:length(snr_vec)) {
+#   test_df <- generate_data(n_bar = 3,
+#             J = 232,
+#             alpha = 1/3,
+#             type = 4,
+#             p = 185,
+#             s = 7,
+#             # s = 1:10,
+#             default = 1,
+#             cov_x = -0.0006,
+#             scale = 0.75,
+#             base_mean_x = 0,
+#             sigma_x = 1,
+#             mean_r = 0,
+#             sigma_r = 0.2,
+#             snr = 0.44,
+#             mean_noise = 0,
+#             sigma_noise = 1)
+#   
+#   icc[i] <- multilevel.icc(test_df$Y, cluster = test_df$j)
+# }
+# 
+# plot(x = sigma_r_vec, y = icc)
+# abline(h = multilevel.icc(df_analysis_largec$gain_c_mefs_str, 
+#                           df_analysis_largec$provid))
+
+
+```
+
+
+```{r}
+# sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
+debugging = FALSE
+sink(paste0(root, "logs/new_outcome.txt"))
+
+params <- sample_n(params, nrow(params))
+tictoc::tic(paste(R, "iterations one set"))
+
+if (!debugging) {
+    # Run in parallel
+  
+    plan(multisession, workers = parallel::detectCores() - 2)
+    
+    params$res <- future_pmap(params, .f = file_saving_sim,
+                          .options = furrr_options(seed = NULL),
+                          .progress = TRUE)
+    
+    plan(sequential)
+    
+} else {
+  # Run not in parallel, used for debugging
+  params$res <- pmap(params, .f = file_saving_sim)
+}
+
+Sys.sleep(1)
+tictoc::toc()
+
+sink()
+# 10 iterations one set: 19.772 sec elapsed, with 6 cores?? 
+# 10 iterations one set: 20.74 sec elapsed, with 46 cores??
+```
+
+```{r}
+concat_files <- function(pathname) {
+  setwd(pathname)
+  for (data in list.files()){
+  
+  # Create the first data if no data exist yet
+    if (!exists("dataset")){
+      dataset <- read.csv(data, header=TRUE)
+    }
+    
+    # if data already exist, then append it together
+    if (exists("dataset")){
+      tempory <-read.csv(data, header=TRUE)
+      dataset <- rbind(dataset, tempory)
+      rm(tempory)
+    }
+  }
+  return(dataset)
+}
+```
+
+
+```{r}
+# source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
+# pathname <- "/n/home04/thupham17/thesis/results/021323_run"
+pathname <- paste0(root, "results/icc_new_outcome")
+if (TRUE) {
+    # Run in parallel
+  
+    plan(multisession, workers = parallel::detectCores() - 2)
+    
+    dataset <- future_pmap(pathname, .f = concat_files,
+                          .options = furrr_options(seed = NULL),
+                          .progress = TRUE)
+    
+    plan(sequential)
+    
+} else {
+  # Run not in parallel, used for debugging
+  dataset <- pmap(pathname, .f = concat_files)
+}
+
+write.csv(dataset[[1]], 
+          paste0(root, "concat_results/icc_new_outcome.csv"))
+```
+
+
+```{r}
+# options(warn=-1)
+# set.seed(17)
+# 
+# prelim_results <- rerun_mult_parameters(runs_vec = 100, 
+#                                         n_bar_vec = seq(from = 20, to = 100, by = 20),
+#                                         J_vec = seq(from = 2, to = 10, by = 2), 
+#                                         alpha_vec = seq(from = 0, to = 1, 
+#                                                         by = 0.25),
+#                                         type_vec = 1:4,
+#                                         p_vec = seq(from = 2, to = 20, by = 6), 
+#                                         s_vec = seq(from = 1, to = 20, by = 6), 
+#                                         default_vec = 1,
+#                                         cov_x = seq(from = 0, to = 6, by = 3),
+#                                         scale_vec = seq(from = 0, to = 6, by = 3),
+#                                         base_mean_x_vec = 0, 
+#                                         sigma_x_vec = 1,
+#                                         mean_r_vec = 0, 
+#                                         sigma_r_vec = seq(from = 0, to = 4, by = 2),
+#                                         mean_noise_vec = 0, 
+#                                         sigma_noise_vec = 1)
+```
+
+```{r}
+# results <- assess_performance(prelim_results)
+# write.csv(results, "/n/home04/thupham17/fasrc/results.csv")
+```
+
+
+```{r}
+ vars_to_remove <- rep(NA, nrow(high_corr))
+  pairwise_vars_removed <- rep(NA, nrow(high_corr))
+  for (i in 1:nrow(high_corr)) {
+    if (i == 1) {
+      vars_to_remove[i] <- high_corr[i, "variables"]
+      pairwise_vars_removed[i] <- unique(high_corr[high_corr$row == high_corr[i, "col"], "variables"])
+    }
+
+    else {
+      if (high_corr[i, "variables"] %in% pairwise_vars_removed) {
+        next
+      }
+
+      else {
+        vars_to_remove[i] <- high_corr[i, "variables"]
+        pairwise_vars_removed[i] <- unique(high_corr[high_corr$row == high_corr[i, "col"], "variables"])
+      }
+    }
+  }
+
+```
+

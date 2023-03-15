@@ -179,7 +179,7 @@ caretype <- read.dta13("y1caretype.dta") %>%
 outcomes_and_obs_full_y1 <- left_join(outcomes_and_obs_y1, caretype, by = "cid") %>% 
   mutate(hasobservation = is.na(classid)) %>% 
   filter(!is.na(caretype)) %>%
-  filter(!is.na(classid))
+  filter(!is.na(classid)) 
 
 # outcomes_and_obs_full_y1 <- outcomes_and_obs %>% 
 #   filter(!is.na(classid))
@@ -213,15 +213,6 @@ Notes for simulation:
 gain_ind <- which(startsWith(colnames(outcomes_and_obs_full_y1), "gain"))
 ```
 
-```{r}
-# filter out clusters that only have one observation
-outcomes_and_obs_full_y1_largec <-  outcomes_and_obs_full_y1 %>%
-    group_by(provid) %>%
-    filter(n() > 1) %>%
-    droplevels() %>%
-    ungroup
-```
-
 
 ```{r outcomes_corrplot, echo=TRUE, fig.height=8, cache=TRUE}
 res <- cor(outcomes_and_obs_full_y1_largec[, gain_ind],
@@ -250,6 +241,21 @@ dim(outcomes_and_obs_full_y1)
 
 ```
 
+
+```{r}
+outcomes_and_obs_full_y1_largec <-  outcomes_and_obs_full_y1 %>% drop_na()
+outcomes_vals <- outcomes_and_obs_full_y1_largec[gain_ind] 
+pca_results <- prcomp(outcome_vals, scale = TRUE)
+pc1 <- pca_results$rotation[, 1]
+
+new_outcome <- rowSums(sweep(outcomes_vals, 2, pc1, "*"))
+
+outcomes_and_obs_full_y1_largec <- cbind(outcomes_and_obs_full_y1_largec,
+                                         new_outcome)
+outcomes <- c(colnames(outcomes_and_obs_full_y1_largec[, gain_ind]),
+              "new_outcome")
+```
+
 ## Analysis
 
 
@@ -257,7 +263,6 @@ dim(outcomes_and_obs_full_y1)
 # for preliminary empirical results, thesis
 #TODO 2/28: need to figure out why I did this weird standardization thing
 
-outcomes <- colnames(outcomes_and_obs_full_y1[, gain_ind])
 models_y1_use <- list()
 coefficients_model_y1_use <- list()
 for (outcome in outcomes_use_y1) {
@@ -299,7 +304,8 @@ for (outcome in outcomes_use_y1) {
 
 
 ```{r}
-outcome <- outcomes_use_y1[1]
+# outcome <- "gain_c_ltr_cogsoc_comp"
+outcome <- "new_outcome"
 other_outcomes <- outcomes[outcomes != outcome]
 
 cv_glmmLasso <- function(data, formula, rand=list(j=~1),
@@ -517,7 +523,7 @@ data_processing <- function(data, cor_value, method = FALSE) {
   print(length(coefs_for_glm))
 
   df_analysis_noncor <- data %>%
-    dplyr::select(c(coefs_for_glm, outcome))
+    dplyr::select(c(coefs_for_glm))
   
   # print(c(coefs_for_glm, outcome))
   print(ncol(df_analysis_noncor))
@@ -567,17 +573,19 @@ data_processing <- function(data, cor_value, method = FALSE) {
     dplyr::select(c(all_of(coefs_for_glm), "provid", outcome)) %>%
     dplyr::select(-c(all_of(linear_vars), all_of(zero_sd_cols),
                      all_of(high_cor_variables)))
+  
   print(ncol(df_analysis_noncor_nonlinear))
   print("finished fourth step")
   
   return(df_analysis_noncor_nonlinear)
 }
 
-raw_full_data <- outcomes_and_obs_full_y1 %>%
-filter(!is.na(outcomes_and_obs_full_y1[[outcome]])) %>%
+raw_full_data <- outcomes_and_obs_full_y1_largec %>%
+filter(!is.na(outcomes_and_obs_full_y1_largec[[outcome]])) %>%
 dplyr::select(-c(all_of(other_outcomes), caretype, classid, 
                  cid, nsweeps.y,
                  actualtype, nsweeps.x)) %>%
+  mutate(provid = as.factor(provid)) %>%
   drop_na()
 df_analysis_largec <- as.data.frame(data_processing(raw_full_data,
                                       cor_value = 0.95))

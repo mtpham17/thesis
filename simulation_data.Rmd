@@ -9,75 +9,74 @@ editor_options:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-```
-
-```{r}
-concat_files <- function(pathname) {
-  setwd(pathname)
-  for (data in list.files()){
-  
-  # Create the first data if no data exist yet
-    if (!exists("dataset")){
-      dataset <- read.csv(data, header=TRUE)
-    }
-    
-    # if data already exist, then append it together
-    if (exists("dataset")){
-      tempory <-read.csv(data, header=TRUE)
-      dataset <-unique(rbind(dataset, tempory))
-      rm(tempory)
-    }
-  }
-  return(dataset)
-}
-```
-
-
-```{r}
-# source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
-pathname <- "/n/home04/thupham17/thesis/results/020323_run"
-if (TRUE) {
-    # Run in parallel
-    
-    library(future)
-    library(furrr)
-  
-    plan(multisession, workers = parallel::detectCores() - 2 )
-    
-    dataset <- future_pmap(pathname, .f = concat_files,
-                          .options = furrr_options(seed = NULL),
-                          .progress = TRUE)
-    
-    plan(sequential)
-    
-} else {
-  # Run not in parallel, used for debugging
-  dataset <- pmap(pathname, .f = concat_files)
-}
-```
-```{r}
-write.csv(dataset[[1]], "/n/home04/thupham17/thesis/concat_results/020323_run.csv")
-```
-
-```{r}
-# now, take a look at dataset[[1]]
 library(dplyr)
 library(tidyverse)
-crashed_data <- read.csv('/Users/thupham/Desktop/thesis/concat_results/crash_data.cvs')
+root <- "/n/home04/thupham17/thesis/"
 ```
 
+```{r}
+load.all.sims = function( filehead ) {
+  
+  files = list.files( filehead, full.names=TRUE)
+  
+  res = map_df( files, function( fname ) {
+    # cat( "Reading results from ", fname, "\n" )
+    rs = readRDS( file = fname )
+    rs$filename = fname
+    rs$result
+  })
+  res
+}
+```
 
 ```{r}
-collapsed_crash_snr <- crashed_data %>% 
-  group_by(snr) %>%
-  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE))) %>%
+scale <- load.all.sims(paste0(root, "results/icc_scale/"))
+write.csv(scale, paste0(root, "concat_results/icc_scale.csv"))
+sigma_r <- load.all.sims(paste0(root, "results/icc_sigma_r"))
+write.csv(sigma_r, paste0(root, "concat_results/icc_sigma_r.csv"))
+```
+
+```{r}
+# no NA values, so assume that each went through full 1000 reps!
+scale_low_snr <- scale %>%
+  filter(snr < 1) %>%
+  group_by(scale) %>%
+  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
+            across(reps, sum)) %>%
   ungroup()
 
-collapsed_crash_s <- crashed_data %>%
-  group_by(s) %>%
-  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE))) %>%
-  mutate(s_prop = s / 60) %>%
+scale_high_snr <- scale %>%
+  filter(snr > 1) %>%
+  group_by(scale) %>%
+  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
+            across(reps, sum)) %>%
   ungroup()
+
+sigma_r_low_snr <- sigma_r %>%
+  filter(snr < 1) %>%
+  group_by(sigma_r) %>%
+  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
+            across(reps, sum)) %>%
+  ungroup()
+
+sigma_r_high_snr <- sigma_r %>%
+  filter(snr > 1) %>%
+  group_by(sigma_r) %>%
+  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
+            across(reps, sum)) %>%
+  ungroup()
+
+sigma_r_snr <- rbind(sigma_r_high_snr, sigma_r_low_snr) %>%
+  mutate()
+
+  
+```
+
+```{r}
+ggplot(sigma_r_low_snr, mapping = aes(x = sigma_r,
+                        y = mean_agreement)) +
+  geom_line() + 
+  geom_point()
 ```
 
 

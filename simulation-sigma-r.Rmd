@@ -232,7 +232,8 @@ generate_data <- function(n_bar, J, alpha,
               "betas" = fixed_beta,
               "snr" = snr,
               "default" = default,
-              "p" = p))
+              "p" = p,
+              "sigma_r" = sigma_r))
 }
 
 test_generate <- generate_data(n_bar = 3,
@@ -447,7 +448,7 @@ quiet_mixed_lasso <- quietly(glmmLasso)
 
 ```{r}
 # Analyze
-analyze <- function(data, p, true_beta, default, snr) {
+analyze <- function(data, p, true_beta, default, snr, sigma_r) {
   var.names <- paste("X", 1:p, sep = "")
   formula <- as.formula(paste("Y ~", paste(var.names, collapse = " + ")))
   
@@ -467,17 +468,9 @@ analyze <- function(data, p, true_beta, default, snr) {
   # errors_lambda_range <- sum(unlist(lapply(l_range[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0))))
   # l_range <- l_range$result
   
-  print(paste("this is my snr parameter:", snr))
-  # print(snr %in% min_lambdas$snr)
-  # print(class(snr))
-  # print(min_lambdas$snr)
-  # print(class(min_lambdas$snr))
-  # print(min_lambdas[min_lambdas$snr == snr, ])
-  # print(which(min_lambdas$snr == 0.34))
-  l_range <- lambda_range_2(snr)
+  print(paste("this is my sigma_r parameter:", sigma_r))
+  l_range <- lambda_range_2(sigma_r)
   print(l_range)
-  # print(l_range[1])
-  # print(l_range[2])
   
   best_lambda <- quiet_cv_glmmLasso(data = data,
                              formula = formula,
@@ -572,7 +565,8 @@ one_run <- function(n_bar, J, alpha,
                     mean_noise = mean_noise, sigma_noise = sigma_noise)
   
   result <- analyze(data = generate$data, p = generate$p, true_beta = generate$betas, 
-                    default = generate$default, snr = generate$snr)
+                    default = generate$default, snr = generate$snr,
+                    sigma_r = generate$sigma_r)
   return(result)
 }
 

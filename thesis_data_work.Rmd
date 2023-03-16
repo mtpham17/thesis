@@ -792,3 +792,16 @@ hist_coefs
 ggsave("/Users/thupham/Desktop/thesis/plots/all_coefs.png", width=6.5)
 ```
 
+```{r}
+hist_coefs_zoom <- ggplot(all_coefs %>% filter(abs(Estimate) < 20), 
+                          mapping = aes(x = Estimate)) +
+  geom_histogram(color = "black", fill = "#FF9999") +
+  ggtitle("Histogram of Coefficient Values") +
+  ylab("Frequency") + 
+  xlab("Coefficients from Basic Linear Regression") + 
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  facet_wrap(~outcomes, ncol = 2, labeller = variable_labeller)
+
+hist_coefs_zoom
+```
+

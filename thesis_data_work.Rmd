@@ -582,7 +582,7 @@ data_processing <- function(data, cor_value, outcome, method = FALSE) {
 
 outcomes_use <- c("new_outcome", "gain_c_mefs_str", "gain_c_ltr_cogsoc_comp")
 # change this each time
-outcome <- outcomes_use[1]
+outcome <- outcomes_use[3]
 other_outcomes <- setdiff(outcomes, outcome)
 raw_full_data <- outcomes_and_obs_full_y1_largec %>%
 dplyr::select(-c(all_of(other_outcomes), caretype, classid, 
@@ -591,7 +591,7 @@ dplyr::select(-c(all_of(other_outcomes), caretype, classid,
   mutate(provid = as.factor(provid)) %>%
   drop_na(outcome)
 df_analysis_largec <- as.data.frame(data_processing(raw_full_data,
-                                      cor_value = 0.95, outcome = outcome))
+                                      cor_value = 0.80, outcome = outcome))
 ```
 
 ## try 2-fold cross validation to see if this fixes the rank issue
@@ -726,5 +726,69 @@ cov <- cor * std * cor
 - snr = 0.46
 
 
+```{r}
+all_coefs <- rbind(as.data.frame(mefs_coefs), 
+                   as.data.frame(ltr_coefs),
+                   as.data.frame(new_outcome_coefs))
 
+all_coefs$outcomes <- factor(c(rep("mefs", nrow(mefs_coefs)),
+                               rep("ltr", nrow(ltr_coefs)),
+                               rep("new", nrow(new_outcome_coefs))))
+
+write.csv(all_coefs, 
+          "/Users/thupham/Desktop/thesis/outcomes_coefs.csv")
+
+all_clusters <- rbind(as.data.frame(mefs_clusters), 
+                   as.data.frame(ltr_clusters),
+                   as.data.frame(new_outcome_clusters))
+
+all_clusters$outcomes <- factor(c(rep("mefs", nrow(mefs_clusters)),
+                               rep("ltr", nrow(ltr_clusters)),
+                               rep("new", nrow(new_outcome_clusters))))
+
+write.csv(all_clusters, 
+          "/Users/thupham/Desktop/thesis/outcomes_clusters.csv")
+```
+
+
+```{r}
+variable_names <- list(
+  "mefs" = "Executive Function Z-Score" ,
+  "ltr" = "Leiter Test Score",
+  "new" = "Hybrid PCA Score"
+)
+
+
+variable_labeller <- function(variable, value){
+  return(variable_names[value])
+}
+```
+
+
+```{r}
+hist_clusters <- ggplot(all_clusters, mapping = aes(x = n)) +
+  geom_histogram(color = "black", fill = "#FF9999") +
+  ggtitle("Histogram of Size of Clusters") +
+  ylab("Frequency") +
+  xlab("Cluster Size") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  facet_wrap(~outcomes, ncol = 2, labeller = variable_labeller)
+
+hist_clusters
+ggsave("/Users/thupham/Desktop/thesis/plots/all_cluster_size.png",
+       width = 6.5)
+```
+
+```{r}
+hist_coefs <- ggplot(all_coefs, mapping = aes(x = Estimate)) +
+  geom_histogram(color = "black", fill = "#FF9999") +
+  ggtitle("Histogram of Coefficient Values") +
+  ylab("Frequency") + 
+  xlab("Coefficients from Basic Linear Regression") + 
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  facet_wrap(~outcomes, ncol = 2, labeller = variable_labeller)
+
+hist_coefs
+ggsave("/Users/thupham/Desktop/thesis/plots/all_coefs.png", width=6.5)
+```
 

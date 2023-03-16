@@ -37,9 +37,8 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 
 # https://rdrr.io/cran/glmmLasso/src/demo/glmmLasso-soccer.r
 cv_glmmLasso <- function(data, formula, rand=list(j=~1),
-                      lambda_step=20, lambda_min = lambda_min,
+                      lambda_step=10, lambda_min = lambda_min,
                       lambda_max = lambda_max, kk=5) {
-  return(lambda_min)
   lambdas <- seq(lambda_min, lambda_max, length = lambda_step)
   
   N <- dim(data)[1]
@@ -701,7 +700,7 @@ file_saving_sim = function(chunkNo, seed, reps,
 options(warn=-1)
 
 R <- 1000
-M_CHUNK <- 50
+M_CHUNK <- 100
 
 # changed J to 232, and p to 188
 params <- expand.grid(chunkNo = 1:M_CHUNK,

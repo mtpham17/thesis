@@ -22,8 +22,8 @@ library(future)
 library(furrr)
 library(purrr)
 library(misty)
-root <- "/Users/thupham/Desktop/thesis/"
-# root <- "/n/home04/thupham17/thesis/"
+# root <- "/Users/thupham/Desktop/thesis/"
+root <- "/n/home04/thupham17/thesis/"
 snr_vec <- seq(0.05, 6, 0.5)
 ```
 
@@ -304,13 +304,13 @@ lambda_range <- function(data, p, baseline_min_lambda = 10^(-2), baseline_max_la
 
 
 ```{r}
-lambda_range_2 <- function(snr) {
-  min_lambdas <- c(0.010000, 0.010000, 2.641553, 0.010000, 0.010000, 0.010000, 0.010000,
-                   0.010000, 0.010000, 0.010000, 0.010000, 0.010000, 0.010000)
-  max_lambdas <- c(973.6845, 855.2646, 847.3699, 850.0015, 797.3704, 844.7384, 773.6865, 
-                   771.0549, 797.3704, 784.2127, 805.2651, 786.8442, 792.1073)
-  snr_vec <- c(0.14, 0.44, 0.74, 1.04, 1.34, 1.64, 1.94, 2.24, 2.54, 2.84, 3.14, 3.44, 3.74)
-  index <- unlist(lapply(snr_vec, function(x) all.equal(x, snr))) == TRUE
+lambda_range_2 <- function(sigma) {
+  # data <- read.csv(paste0(root, "min_lambda_sigma_r.csv"))
+  min_lambdas <- c(121.0614, 813.1598, 997.3684, 997.3684, 1000.0000, 1000.0000, 
+                   1000.0000, 1000.0000, 1000.0000)
+  max_lambdas <- c(1000, 1000, 1000, 1000, 1500, 1500, 1500, 1500, 1500)
+  sigma_vec <- seq(0, 4, by = 0.5)
+  index <- unlist(lapply(sigma_vec, function(x) all.equal(x, sigma))) == TRUE
   return(c(min_lambdas[index],
            max_lambdas[index]))
 }
@@ -318,70 +318,72 @@ lambda_range_2 <- function(snr) {
 
 ```{r}
 # find best lambda range for each set of parameters, to avoid running l_range each time
-set.seed(17)
-reps <- 20
-pathname <- paste0(root, "min_lambda_sigma_r/")
-
-min_lambda_helper <- function(sigma_r) {
-  one_sigma_min <- rep(NA, reps)
-  one_sigma_max <- rep(NA, reps)
-  for (j in 1:reps) {
-    test_df <- generate_data(n_bar = 3,
-                      # J = 232,
-                      J = 168,
-                      alpha = 1/3,
-                      type = 4,
-                      p = 185,
-                      # s = 7,
-                      s = 81,
-                      # s = 1:10,
-                      default = 1,
-                      cov_x = 0.05576108,
-                      # cov_x = 0.01597747,
-                      scale = 0.75,
-                      base_mean_x = 0,
-                      sigma_x = 1,
-                      mean_r = 0,
-                      sigma_r = sigma_r,
-                      snr = 1.28,
-                      # put this back in when done:
-                      # snr = snr_vec,
-                      mean_noise = 0,
-                      sigma_noise = 1)
-    l_range <- lambda_range(test_df$data, test_df$p)
-    print(l_range)
-    one_sigma_min[j] <- l_range[1]
-    one_sigma_max[j] <- l_range[2]
-    }
-    df <- data.frame("sigma_r" = sigma_r,
-                "lambda_min" = mean(one_sigma_min),
-                "lambda_max" = mean(one_sigma_max))
-    write.csv(df, paste0(pathname, sigma_r, ".csv"))
-    return(df)
-}
-
-sigma_df <- data.frame("sigma_r" = seq(0, 4, by = 0.5))
-# write.csv(dataset[[1]],
-#           paste0(root, "min_lambda"))
-# Run in parallel
-
-plan(multisession, workers = parallel::detectCores() - 2)
-
-sigma_df$res <- future_pmap(sigma_df, .f = min_lambda_helper,
-                      .options = furrr_options(seed = NULL),
-                      .progress = TRUE)
-
-plan(sequential)
-
-data <- read.csv(paste0(root, "min_lambda_sigma_r/1.csv"))
-for (scale in scale_vec[-1]) {
-  new <- read.csv(paste0(root, "min_lambda_sigma_r/", scale, ".csv"))
-  data <- rbind(data, new)
-}
-
-data <- data %>%
-  dplyr::select(-c("X"))
-write.csv(data, paste0(root, "min_lambda_sigma_r.csv"))
+# set.seed(17)
+# reps <- 20
+# pathname <- paste0(root, "min_lambda_sigma_r/")
+# 
+# min_lambda_helper <- function(sigma_r) {
+#   one_sigma_min <- rep(NA, reps)
+#   one_sigma_max <- rep(NA, reps)
+#   for (j in 1:reps) {
+#     test_df <- generate_data(n_bar = 3,
+#                       # J = 232,
+#                       J = 168,
+#                       alpha = 1/3,
+#                       type = 4,
+#                       p = 185,
+#                       # s = 7,
+#                       s = 81,
+#                       # s = 1:10,
+#                       default = 1,
+#                       cov_x = 0.05576108,
+#                       # cov_x = 0.01597747,
+#                       scale = 0.75,
+#                       base_mean_x = 0,
+#                       sigma_x = 1,
+#                       mean_r = 0,
+#                       sigma_r = sigma_r,
+#                       snr = 1.28,
+#                       # put this back in when done:
+#                       # snr = snr_vec,
+#                       mean_noise = 0,
+#                       sigma_noise = 1)
+#     l_range <- lambda_range(test_df$data, test_df$p)
+#     print(l_range)
+#     one_sigma_min[j] <- l_range[1]
+#     one_sigma_max[j] <- l_range[2]
+#     }
+#     df <- data.frame("sigma_r" = sigma_r,
+#                 "lambda_min" = mean(one_sigma_min),
+#                 "lambda_max" = mean(one_sigma_max))
+#     write.csv(df, paste0(pathname, sigma_r, ".csv"))
+#     return(df)
+# }
+# 
+# sigma_vec <- seq(0, 4, by = 0.5)
+# sigma_df <- data.frame("sigma_r" = sigma_vec)
+# # write.csv(dataset[[1]],
+# #           paste0(root, "min_lambda"))
+# # Run in parallel
+# 
+# plan(multisession, workers = parallel::detectCores() - 2)
+# 
+# sigma_df$res <- future_pmap(sigma_df, .f = min_lambda_helper,
+#                       .options = furrr_options(seed = NULL),
+#                       .progress = TRUE)
+# 
+# plan(sequential)
+# 
+# data <- read.csv(paste0(root, "min_lambda_sigma_r/0.csv"))
+# for (sigma in sigma_vec[-1]) {
+#   new <- read.csv(paste0(root, "min_lambda_sigma_r/", sigma, ".csv"))
+#   data <- rbind(data, new)
+# }
+# 
+# data <- data %>%
+#   arrange(sigma_r)
+# write.csv(data, paste0(root, "min_lambda_sigma_r.csv"))
+# ```
 ```
 
 
@@ -634,7 +636,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, snr,
                            mean_noise, sigma_noise) 
   {
-    fname = paste0(root, "results/icc_new_outcome/",
+    fname = paste0(root, "results/icc_sigma_r/",
                chunkNo, "_", seed, ".rds")
     res = NA
     if (!file.exists(fname)) {
@@ -673,25 +675,19 @@ M_CHUNK <- 50
 # changed J to 232, and p to 188
 params <- expand.grid(chunkNo = 1:M_CHUNK,
                       n_bar = 3,
-                      # J = 232,
                       J = 168,
                       alpha = 1/3,
                       type = 4,
                       p = 185,
-                      # s = 7,
                       s = 81,
-                      # s = 1:10,
                       default = 1,
                       cov_x = 0.05576108,
-                      # cov_x = 0.01597747,
                       scale = 0.75,
                       base_mean_x = 0,
                       sigma_x = 1,
                       mean_r = 0,
-                      sigma_r = 0.2,
-                      snr = seq(0.14, 4, by = 0.3),
-                      # put this back in when done:
-                      # snr = snr_vec,
+                      sigma_r = seq(0, 4, by = 0.5),
+                      snr = 1.28,
                       mean_noise = 0,
                       sigma_noise = 1)
 
@@ -739,7 +735,7 @@ params <- params %>% mutate(
 ```{r}
 # sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
 debugging = FALSE
-sink(paste0(root, "logs/new_outcome.txt"))
+sink(paste0(root, "logs/icc_sigma_r.txt"))
 
 params <- sample_n(params, nrow(params))
 tictoc::tic(paste(R, "iterations one set"))
@@ -793,7 +789,7 @@ concat_files <- function(pathname) {
 ```{r}
 # source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
 # pathname <- "/n/home04/thupham17/thesis/results/021323_run"
-pathname <- paste0(root, "results/icc_new_outcome")
+pathname <- paste0(root, "results/icc_sigma_r")
 if (TRUE) {
     # Run in parallel
   
@@ -811,7 +807,7 @@ if (TRUE) {
 }
 
 write.csv(dataset[[1]], 
-          paste0(root, "concat_results/icc_new_outcome.csv"))
+          paste0(root, "concat_results/icc_sigma_r.csv"))
 ```
 
 

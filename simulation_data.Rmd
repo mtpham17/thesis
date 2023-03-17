@@ -11,8 +11,8 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(tidyverse)
-root <- "/n/home04/thupham17/thesis/"
-# root <- "/Users/thupham/Desktop/thesis/"
+# root <- "/n/home04/thupham17/thesis/"
+root <- "/Users/thupham/Desktop/thesis/"
 ```
 
 ```{r}
@@ -43,6 +43,7 @@ load.all.sims = function( filehead ) {
 ```{r}
 scale <- read.csv(paste0(root, "concat_results/icc_scale.csv"))
 sigma_r <- read.csv(paste0(root, "concat_results/icc_sigma_r.csv"))
+snr <- read.csv(paste0(root, "concat_results/icc_snr.csv"))
 ```
 
 ```{r}
@@ -88,6 +89,15 @@ scale_snr <- rbind(scale_high_snr, scale_low_snr) %>%
   mutate(min_agreement = mean_agreement - sd_agreement,
          max_agreement = mean_agreement + sd_agreement)
 
+snr_collapse <- snr %>%
+  group_by(snr) %>%
+  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
+          across(reps, sum)) %>%
+  ungroup()
+
+snr_collapse <- snr_collapse %>%
+  mutate(min_agreement = mean_agreement - sd_agreement,
+         max_agreement = mean_agreement + sd_agreement)
   
 ```
 
@@ -133,6 +143,38 @@ scale_snr_plot <- ggplot(scale_snr, mapping = aes(x = scale,
 scale_snr_plot
 ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
        "agreement_snr_scale.png"))
+```
+
+```{r}
+agreement <- data.frame(snr = c(0.42, 0.23, 1.28),
+                        mean_agreement = c(0.427027, 0.1984733, 0.00591716),
+                        min_agreement = c(0.427027, 0.1984733, 0.00591716),
+                        max_agreement = c(0.427027, 0.1984733, 0.00591716),
+                        outcome = factor(c("MEFS", "LTR", "Hybrid")))
+```
+
+
+
+```{r}
+snr_plot <- ggplot(snr_collapse, mapping = aes(x = snr,
+                        y = mean_agreement,
+                        ymin = min_agreement,
+                        ymax = max_agreement)) +
+  geom_line(color = "#CC79A7") + 
+  geom_ribbon(alpha = 0.25) + 
+  geom_point(color = "#CC79A7") +
+  ggtitle("Mean Agreement vs. SNR") +
+  ylab("Mean Agreement") + 
+  xlab("Signal to Noise Ratio") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = 'bottom') +
+  geom_point(data = agreement, 
+             mapping = aes(color = outcome)) +
+  guides(color=guide_legend(title="ELS@H Data"))
+
+snr_plot
+ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
+       "agreement_snr.png"))
 ```
 
 ```{r}
@@ -188,21 +230,64 @@ p
 
 
 ```{r}
-metric_colnames <- colnames(sigma_r_snr %>%
-                              dplyr::select(contains("y_rmse")))
-
-subset <- sigma_r_snr %>%
-  dplyr::select(c(metric_colnames), "snr_level", "sigma_r",
-                    "mean_adj_r_squared", "mean_icc")
-
-metric <- "y_rmse"
-new <- subset %>%
-  pivot_longer(cols = metric_colnames,
-               names_to = c('.value', 'effects'),
-               names_pattern = paste0("^(\\w+_",
+tidy_plots_snr <- function(data, x, metric) {
+  metric_colnames <- colnames(data %>% dplyr::select(contains(metric)))
+  data_subset <- data %>%
+    dplyr::select(c(contains(metric), x,
+                    "mean_adj_r_squared", "mean_icc"))
+  dataset_tidy <- data_subset %>%
+    pivot_longer(cols = metric_colnames, 
+                 names_to = c('.value', 'effects'),
+                 names_pattern = paste0("^(\\w+_",
                                       metric,
                                       ")_(\\w+)"))
+  
+  dataset_to_plot <- dataset_tidy %>%
+    mutate(!!paste0(metric, "_min") := get(paste0("mean_", metric)) -
+             get(paste0("sd_", metric)),
+           !!paste0(metric, "_max") := get(paste0("mean_", metric)) +
+             get(paste0("sd_", metric)))
 
+  
+  p <- ggplot(data = dataset_to_plot, 
+       mapping = aes(x = get(x), y = get(paste0("mean_", metric)),
+                     ymin = get(paste0(metric, "_min")),
+                     ymax = get(paste0(metric, "_max")),
+                     group = factor(effects),
+                     color = factor(effects))) + 
+    geom_point() + 
+    geom_line() +
+    geom_ribbon(alpha = 0.25) +
+    ggtitle(paste("Mean", outcome_label[metric], "vs. SNR")) +
+    xlab("Signal to Noise Ratio") + 
+    ylab(outcome_label[metric]) + 
+    theme(plot.title = element_text(hjust = 0.5,
+                                    size = 10),
+        legend.position = 'bottom') + 
+    scale_color_manual(name = "Effects",
+                     labels=c('Fixed-Effects LASSO', 
+                              'Mixed-Effects LASSO'),
+                      values = c("#56B4E9", "#CC79A7")) 
+  
+  if (metric == "s_hat") {
+    p <- p + geom_hline(yintercept = 81, linetype = "dashed")
+  }
+  
+  p
+  
+  ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
+       metric, "_", x, ".png"))
+  
+  return()
+                 
+  
+}
+
+
+tidy_plots_snr(snr_collapse, "snr", "s_hat")
+tidy_plots_snr(snr_collapse, "snr", "F1")
+tidy_plots_snr(snr_collapse, "snr", "beta_rmse")
+tidy_plots_snr(snr_collapse, "snr", "y_rmse")
 ```
 
 
@@ -286,13 +371,6 @@ tidy_plots(scale_snr, "scale", "beta_rmse")
 tidy_plots(scale_snr, "scale", "y_rmse")
 
 ```
-
-```{r}
-agreement <- data.frame(snr = 0.46,
-                        s = 7 / 60, 
-                        mean_agreement = 0.427027)
-```
-
 
 ```{r}
 # "tidy F1"

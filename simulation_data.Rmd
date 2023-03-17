@@ -11,8 +11,8 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(tidyverse)
-# root <- "/n/home04/thupham17/thesis/"
-root <- "/Users/thupham/Desktop/thesis/"
+root <- "/n/home04/thupham17/thesis/"
+# root <- "/Users/thupham/Desktop/thesis/"
 ```
 
 ```{r}
@@ -35,6 +35,8 @@ load.all.sims = function( filehead ) {
 # write.csv(scale, paste0(root, "concat_results/icc_scale.csv"))
 # sigma_r <- load.all.sims(paste0(root, "results/icc_sigma_r"))
 # write.csv(sigma_r, paste0(root, "concat_results/icc_sigma_r.csv"))
+# snr <- load.all.sims(paste0(root, "results/icc_new_outcome"))
+# write.csv(snr, paste0(root, "concat_results/icc_snr.csv"))
 ```
 
 

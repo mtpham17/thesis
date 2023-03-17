@@ -75,22 +75,30 @@ sigma_r_high_snr <- sigma_r %>%
 
 sigma_r_snr <- rbind(sigma_r_high_snr, sigma_r_low_snr) %>%
   mutate(snr_level = factor(rep(c("high", "low"), 
-                                each = nrow(sigma_r_high_snr))))
+                                each = nrow(sigma_r_high_snr)))) %>%
+  mutate(sigma_r = sigma_r^2) %>%
+  mutate(min_agreement = mean_agreement - sd_agreement,
+         max_agreement = mean_agreement + sd_agreement)
 
 scale_snr <- rbind(scale_high_snr, scale_low_snr) %>%
   mutate(snr_level = factor(rep(c("high", "low"), 
-                                each = nrow(scale_high_snr))))
+                                each = nrow(scale_high_snr)))) %>%
+  mutate(min_agreement = mean_agreement - sd_agreement,
+         max_agreement = mean_agreement + sd_agreement)
 
   
 ```
 
 ```{r}
-sigma_r_snr_plot <- ggplot(sigma_r_snr, mapping = aes(x = sigma_r^2,
+sigma_r_snr_plot <- ggplot(sigma_r_snr, mapping = aes(x = sigma_r,
                         y = mean_agreement,
+                        ymin = min_agreement,
+                        ymax = max_agreement,
                         group = snr_level,
                         color = snr_level)) +
   geom_line() + 
   geom_point() +
+  geom_ribbon(alpha = 0.25) + 
   ggtitle("Mean Agreement vs. Variance of Clusters") +
   ylab("Mean Agreement") + 
   xlab("Variance of Clusters") + 
@@ -105,10 +113,13 @@ ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
 
 scale_snr_plot <- ggplot(scale_snr, mapping = aes(x = scale,
                         y = mean_agreement,
+                        ymin = min_agreement,
+                        ymax = max_agreement,
                         group = snr_level,
                         color = snr_level)) +
   geom_line() + 
   geom_point() +
+  geom_ribbon(alpha = 0.25) + 
   ggtitle("Mean Agreement vs. Scale") +
   ylab("Mean Agreement") + 
   xlab("Scale") + 
@@ -197,6 +208,14 @@ new <- subset %>%
 # ggsave("/Users/thupham/Desktop/thesis/plots/F1_score.png", width = 9)
 # try to make this into a function
 
+outcome_label <- list("y_rmse" = "Y RMSE",
+                      "beta_rmse" = "Beta RMSE",
+                      "s_hat" = "Number of Estimated Non-Zero Coefficients",
+                      "F1" = "F Score")
+
+x_label <- list("sigma_r" = "Variance in Cluster",
+                "scale" = "Number of True Non-Zero Coefficients")
+
 tidy_plots <- function(data, x, metric) {
   metric_colnames <- colnames(data %>% dplyr::select(contains(metric)))
   data_subset <- data %>%
@@ -215,14 +234,54 @@ tidy_plots <- function(data, x, metric) {
              get(paste0("sd_", metric)),
            !!paste0(metric, "_max") := get(paste0("mean_", metric)) +
              get(paste0("sd_", metric)))
+
   
-  return(dataset_to_plot)
+  p <- ggplot(data = dataset_to_plot, 
+       mapping = aes(x = get(x), y = get(paste0("mean_", metric)),
+                     ymin = get(paste0(metric, "_min")),
+                     ymax = get(paste0(metric, "_max")),
+                     group = factor(effects),
+                     color = factor(effects))) + 
+    geom_point() + 
+    geom_line() +
+    geom_ribbon(alpha = 0.25) +
+    ggtitle(paste("Mean", outcome_label[metric], "vs.",
+                x_label[x])) +
+    xlab(x_label[x]) + 
+    ylab(outcome_label[metric]) + 
+    theme(plot.title = element_text(hjust = 0.5,
+                                    size = 10),
+        legend.position = 'bottom') + 
+    scale_color_manual(name = "Effects",
+                     labels=c('Fixed-Effects LASSO', 
+                              'Mixed-Effects LASSO'),
+                      values = c("#56B4E9", "#CC79A7")) +
+    facet_wrap(~snr_level,
+             labeller = variable_labeller)
+  
+  if (metric == "s_hat") {
+    p <- p + geom_hline(yintercept = 81, linetype = "dashed")
+  }
+  
+  p
+  
+  ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
+       metric, "_", x, ".png"))
+  
+  return()
                  
   
 }
 
-tidy <- tidy_plots(sigma_r_snr, "sigma_r", "y_rmse")
+tidy_plots(sigma_r_snr, "sigma_r", "s_hat")
+tidy_plots(sigma_r_snr, "sigma_r", "F1")
+tidy_plots(sigma_r_snr, "sigma_r", "beta_rmse")
+tidy_plots(sigma_r_snr, "sigma_r", "y_rmse")
 
+tidy_plots(scale_snr, "scale", "s_hat")
+tidy_plots(scale_snr, "scale", "F1")
+tidy_plots(scale_snr, "scale", "beta_rmse")
+tidy_plots(scale_snr, "scale", "y_rmse")
 
 ```
 

@@ -665,7 +665,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, snr,
                            mean_noise, sigma_noise) 
   {
-    fname = paste0(root, "results/icc_spurious_2/",
+    fname = paste0(root, "results/icc_spurious/",
                chunkNo, "_", seed, ".rds")
     res = NA
     if (!file.exists(fname)) {
@@ -720,7 +720,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       sigma_x = 1,
                       mean_r = 0,
                       sigma_r = 4,
-                      snr = seq(0.14, 4, by = 0.6),
+                      snr = seq(0.14, 4, by = 0.3),
                       # put this back in when done:
                       # snr = snr_vec,
                       mean_noise = 0,
@@ -770,7 +770,7 @@ params <- params %>% mutate(
 ```{r}
 # sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
 debugging = FALSE
-sink(paste0(root, "logs/icc_spurious_2.txt"))
+sink(paste0(root, "logs/icc_spurious.txt"))
 
 params <- sample_n(params, nrow(params))
 tictoc::tic(paste(R, "iterations one set"))
@@ -824,7 +824,7 @@ concat_files <- function(pathname) {
 ```{r}
 # source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
 # pathname <- "/n/home04/thupham17/thesis/results/021323_run"
-pathname <- paste0(root, "results/icc_spurious_2")
+pathname <- paste0(root, "results/icc_spurious")
 if (TRUE) {
     # Run in parallel
   
@@ -897,4 +897,3 @@ write.csv(dataset[[1]],
   }
 
 ```
-

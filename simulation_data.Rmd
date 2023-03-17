@@ -44,6 +44,8 @@ load.all.sims = function( filehead ) {
 scale <- read.csv(paste0(root, "concat_results/icc_scale.csv"))
 sigma_r <- read.csv(paste0(root, "concat_results/icc_sigma_r.csv"))
 snr <- read.csv(paste0(root, "concat_results/icc_snr.csv"))
+snr_cluster <- read.csv(paste0("/Users/thupham/Desktop/thesis/concat_results", 
+                                "/icc_spurious.csv"))
 ```
 
 ```{r}
@@ -89,6 +91,16 @@ scale_snr <- rbind(scale_high_snr, scale_low_snr) %>%
   mutate(min_agreement = mean_agreement - sd_agreement,
          max_agreement = mean_agreement + sd_agreement)
 
+snr_collapse_cluster <- snr_cluster %>%
+  group_by(snr) %>%
+  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
+          across(reps, sum)) %>%
+  ungroup()
+
+snr_collapse_cluster <- snr_collapse_cluster %>%
+  mutate(min_agreement = mean_agreement - sd_agreement,
+         max_agreement = mean_agreement + sd_agreement)
+
 snr_collapse <- snr %>%
   group_by(snr) %>%
   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
@@ -97,7 +109,8 @@ snr_collapse <- snr %>%
 
 snr_collapse <- snr_collapse %>%
   mutate(min_agreement = mean_agreement - sd_agreement,
-         max_agreement = mean_agreement + sd_agreement)
+         max_agreement = mean_agreement + sd_agreement) %>%
+  filter(snr %in% snr_collapse_cluster$snr)
   
 ```
 
@@ -178,9 +191,26 @@ ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
 ```
 
 ```{r}
-substrRight <- function(x, n){
-  substr(x, nchar(x)-n+1, nchar(x))
-}
+snr_plot_2 <- ggplot(snr_collapse_cluster, mapping = aes(x = snr,
+                        y = mean_agreement,
+                        ymin = min_agreement,
+                        ymax = max_agreement)) +
+  geom_line(color = "#CC79A7") + 
+  geom_ribbon(alpha = 0.25) + 
+  geom_point(color = "#CC79A7") +
+  ggtitle("Mean Agreement vs. SNR") +
+  ylab("Mean Agreement") + 
+  xlab("Signal to Noise Ratio") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = 'bottom') 
+# +
+#   geom_point(data = agreement, 
+#              mapping = aes(color = outcome)) +
+#   guides(color=guide_legend(title="ELS@H Data"))
+
+snr_plot_2
+ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
+       "agreement_snr_cluster.png"))
 ```
 
 
@@ -276,7 +306,7 @@ tidy_plots_snr <- function(data, x, metric) {
   p
   
   ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
-       metric, "_", x, ".png"))
+       metric, "_", x, "_cluster.png"))
   
   return()
                  
@@ -288,6 +318,12 @@ tidy_plots_snr(snr_collapse, "snr", "s_hat")
 tidy_plots_snr(snr_collapse, "snr", "F1")
 tidy_plots_snr(snr_collapse, "snr", "beta_rmse")
 tidy_plots_snr(snr_collapse, "snr", "y_rmse")
+
+tidy_plots_snr(snr_collapse_cluster, "snr", "s_hat")
+tidy_plots_snr(snr_collapse_cluster, "snr", "F1")
+tidy_plots_snr(snr_collapse_cluster, "snr", "beta_rmse")
+tidy_plots_snr(snr_collapse_cluster, "snr", "y_rmse")
+
 ```
 
 

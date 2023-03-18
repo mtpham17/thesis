@@ -11,8 +11,8 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(tidyverse)
-root <- "/n/home04/thupham17/thesis/"
-# root <- "/Users/thupham/Desktop/thesis/"
+# root <- "/n/home04/thupham17/thesis/"
+root <- "/Users/thupham/Desktop/thesis/"
 ```
 
 ```{r}
@@ -37,8 +37,8 @@ load.all.sims = function( filehead ) {
 # write.csv(sigma_r, paste0(root, "concat_results/icc_sigma_r.csv"))
 # snr <- load.all.sims(paste0(root, "results/icc_new_outcome"))
 # write.csv(snr, paste0(root, "concat_results/icc_snr.csv"))
-snr_cluster_2 <- load.all.sims(paste0(root, "results/icc_spurious_2"))
-write.csv(snr_cluster_2, paste0(root, "concat_results/icc_cluster_2.csv"))
+# snr_cluster_2 <- load.all.sims(paste0(root, "results/icc_spurious_2"))
+# write.csv(snr_cluster_2, paste0(root, "concat_results/icc_cluster_2.csv"))
 ```
 
 
@@ -48,6 +48,8 @@ sigma_r <- read.csv(paste0(root, "concat_results/icc_sigma_r.csv"))
 snr <- read.csv(paste0(root, "concat_results/icc_snr.csv"))
 snr_cluster <- read.csv(paste0("/Users/thupham/Desktop/thesis/concat_results", 
                                 "/icc_spurious.csv"))
+snr_cluster_2 <- read.csv(paste0("/Users/thupham/Desktop/thesis/concat_results", 
+                                "/icc_cluster_2.csv"))
 ```
 
 ```{r}
@@ -93,7 +95,7 @@ scale_snr <- rbind(scale_high_snr, scale_low_snr) %>%
   mutate(min_agreement = mean_agreement - sd_agreement,
          max_agreement = mean_agreement + sd_agreement)
 
-snr_collapse_cluster <- snr_cluster %>%
+snr_collapse_cluster <- snr_cluster_2 %>%
   group_by(snr) %>%
   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
           across(reps, sum)) %>%
@@ -213,6 +215,36 @@ snr_plot_2 <- ggplot(snr_collapse_cluster, mapping = aes(x = snr,
 snr_plot_2
 ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
        "agreement_snr_cluster.png"))
+
+```
+```{r}
+# two agreements
+two_agreements <- rbind(snr_collapse,
+                        snr_collapse_cluster) %>%
+  mutate("cluster_var" = factor(rep(c("low", "high"), 
+                                    each = nrow(snr_collapse_cluster))))
+
+snr_plot_3 <- ggplot(two_agreements, mapping = aes(x = snr,
+                        y = mean_agreement,
+                        ymin = min_agreement,
+                        ymax = max_agreement,
+                        group = cluster_var,
+                        color = cluster_var)) +
+  geom_line() + 
+  geom_ribbon(alpha = 0.25) + 
+  geom_point() +
+  ggtitle("Mean Agreement vs. SNR") +
+  ylab("Mean Agreement") + 
+  xlab("Signal to Noise Ratio") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = 'bottom') +
+  scale_color_manual(name = "Cluster Variance",
+                   labels=c('High', 'Low'),
+                    values = c("#56B4E9", "#CC79A7")) 
+
+snr_plot_3
+ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
+       "2_agreement_snr_cluster.png"))
 ```
 
 
@@ -262,6 +294,7 @@ p
 
 
 ```{r}
+
 tidy_plots_snr <- function(data, x, metric) {
   metric_colnames <- colnames(data %>% dplyr::select(contains(metric)))
   data_subset <- data %>%
@@ -299,18 +332,16 @@ tidy_plots_snr <- function(data, x, metric) {
     scale_color_manual(name = "Effects",
                      labels=c('Fixed-Effects LASSO', 
                               'Mixed-Effects LASSO'),
-                      values = c("#56B4E9", "#CC79A7")) 
+                      values = c("#56B4E9", "#CC79A7"))
   
   if (metric == "s_hat") {
     p <- p + geom_hline(yintercept = 81, linetype = "dashed")
   }
   
-  p
-  
   ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
-       metric, "_", x, "_cluster.png"))
+       metric, "_", x, ".png"))
   
-  return()
+  return(p)
                  
   
 }
@@ -339,7 +370,7 @@ outcome_label <- list("y_rmse" = "Y RMSE",
                       "F1" = "F Score")
 
 x_label <- list("sigma_r" = "Variance in Cluster",
-                "scale" = "Number of True Non-Zero Coefficients")
+                "scale" = "Correlation of Random Effects with Covariates")
 
 tidy_plots <- function(data, x, metric) {
   metric_colnames <- colnames(data %>% dplyr::select(contains(metric)))
@@ -410,321 +441,75 @@ tidy_plots(scale_snr, "scale", "y_rmse")
 
 ```
 
-```{r}
-# "tidy F1"
-data_crashed_f1 <- collapsed_crash %>%
-  select(snr, mean_F1_fixed, mean_F1_mixed) %>%
-  pivot_longer(cols = c(mean_F1_fixed, mean_F1_mixed),
-               values_to = "score",
-               names_to = "effects")
-# idea for NA values in certain metrics -- have a threshold?
-# in data generating process, sort beta coefficients from largest to smallest in magnitude (so that you can more easily see whether LASSO keeps around the early coefficients, etc.
-
-# anything above default is good
-# anything below default / 2 is bad
-# anything in between is indifferent
-```
 
 ```{r}
-p <- ggplot(data = data_crashed_f1, 
-       mapping = aes(x = snr, y = F1,
+variable_names_2 <- list("high" = paste0("High Cluster Variance",
+                                         " and Correlation with Covariates"),
+                         "low" = paste0("Low Cluster Variance",
+                                         " and Correlation with Covariates"))
+
+variable_labeller_2 <- function(variable, value){
+  return(variable_names_2[value])
+}
+tidy_plots_snr_c <- function(data, x, metric) {
+  metric_colnames <- colnames(data %>% dplyr::select(contains(metric)))
+  data_subset <- data %>%
+    dplyr::select(c(contains(metric),
+                    "cluster_var", x,
+                    "mean_adj_r_squared", "mean_icc"))
+  dataset_tidy <- data_subset %>%
+    pivot_longer(cols = metric_colnames, 
+                 names_to = c('.value', 'effects'),
+                 names_pattern = paste0("^(\\w+_",
+                                      metric,
+                                      ")_(\\w+)"))
+  
+  dataset_to_plot <- dataset_tidy %>%
+    mutate(!!paste0(metric, "_min") := get(paste0("mean_", metric)) -
+             get(paste0("sd_", metric)),
+           !!paste0(metric, "_max") := get(paste0("mean_", metric)) +
+             get(paste0("sd_", metric)))
+
+  
+  p <- ggplot(data = dataset_to_plot, 
+       mapping = aes(x = get(x), y = get(paste0("mean_", metric)),
+                     ymin = get(paste0(metric, "_min")),
+                     ymax = get(paste0(metric, "_max")),
                      group = factor(effects),
                      color = factor(effects))) + 
-  geom_line() +
-  ggtitle("Mean F1 Score vs. Signal-to-Noise Ratio") +
-  xlab("Signal-to-Noise Ratio") + 
-  ylab("Mean F1 Score") + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
-  scale_color_manual(name = "Effects",
-                     labels=c('Fixed-Effects LASSO', 'Mixed-Effects LASSO'),
-                      values = c('blue', 'red'))
-
-ggsave("/Users/thupham/Desktop/thesis/plots/F1_score.png", width = 9)
-```
-
-
-```{r}
-data_crashed_rmse <- collapsed_crash %>%
-  select(snr, mean_y_rmse_mixed, mean_y_rmse_fixed) %>%
-  pivot_longer(cols = c(mean_y_rmse_mixed, mean_y_rmse_fixed), 
-               values_to = "y_rmse",
-               names_to = "effects")
-```
-
-
-```{r}
-p <- ggplot(data = data_crashed_rmse, 
-       mapping = aes(x = snr, y = y_rmse,
-                     group = factor(effects),
-                     color = factor(effects))) + 
-  geom_line() +
-  ggtitle("Mean Predicted RMSE vs. Signal-to-Noise Ratio") +
-  xlab("Signal-to-Noise Ratio") + 
-  ylab("Mean Y-Hat RMSE") + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
-  scale_color_manual(name = "Effects",
-                     labels=c('Fixed-Effects LASSO', 'Mixed-Effects LASSO'),
-                      values = c('blue', 'red'))
-
-p
-
-ggsave("/Users/thupham/Desktop/thesis/plots/rmse.png")
-```
-
-```{r}
-data_crashed_beta_rmse <- collapsed_crash_snr %>%
-  select(snr, mean_beta_rmse_mixed, mean_beta_rmse_fixed) %>%
-  pivot_longer(cols = c(mean_beta_rmse_mixed, mean_beta_rmse_fixed), 
-               values_to = "beta_rmse",
-               names_to = "effects")
-```
-
-
-```{r}
-p <- ggplot(data = data_crashed_beta_rmse, 
-       mapping = aes(x = snr, y = beta_rmse,
-                     group = factor(effects),
-                     color = factor(effects))) + 
-  geom_line() +
-  ggtitle("Mean Beta RMSE vs. Signal-to-Noise Ratio") +
-  xlab("Signal-to-Noise Ratio") + 
-  ylab("Mean Beta RMSE") + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
-  scale_color_manual(name = "Effects",
-                     labels=c('Fixed-Effects LASSO', 'Mixed-Effects LASSO'),
-                      values = c('blue', 'red'))
-
-p
-
-ggsave("/Users/thupham/Desktop/thesis/plots/beta_rmse.png")
-```
-
-
-
-## new with data run (but this one also crashed)
-```{r}
-crashed_data_2 <- read.csv('/Users/thupham/Desktop/thesis/concat_results/with_data_run.csv')
-```
-
-
-```{r}
-collapsed_crash_snr_2 <- crashed_data_2 %>% 
-  group_by(snr) %>%
-  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE))) %>%
-  ungroup()
-
-collapsed_crash_s_2 <- crashed_data_2 %>%
-  group_by(s) %>%
-  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE))) %>%
-  mutate(s_prop = s / 60) %>%
-  ungroup()
-```
-
-
-```{r}
-# faceted plot -- agreement vs snr. faceted by number of non-zero predictors
-p <- ggplot(data = collapsed_crash_snr_2, 
-       mapping = aes(x = snr, y = mean_agreement)) + 
-  geom_line(color = "cadetblue3") + 
-  geom_point(color = "cadetblue3") +
-  geom_point(data = agreement, 
-             mapping = aes(x = snr, y = mean_agreement)) + 
-  geom_text(data = agreement, 
-            mapping = aes(x = snr,
-                   y = mean_agreement, 
-                   label = "ELS@H Data"),
-            nudge_x = 0.5, nudge_y = 0.025) + 
-  ggtitle("Mean Agreement vs. Signal-to-Noise Ratio") +
-  ylab("Mean Agreement") + 
-  xlab("Signal-to-Noise Ratio") + 
-  theme(plot.title = element_text(hjust = 0.5))
-
-p
-ggsave("/Users/thupham/Desktop/thesis/plots/agreement_snr_2.png")
-
-## need to look at the actual value of agreement (e.g., if it's around 55%) -- does that mean both models are dealing with randomness in different ways, and which 
-```
-
-
-```{r}
-# faceted plot -- agreement vs snr. faceted by number of non-zero predictors
-p <- ggplot(data = collapsed_crash_s_2, 
-       mapping = aes(x = s_prop, y = mean_agreement)) + 
-  geom_line(color = "cadetblue3") + 
-  geom_point(color = "cadetblue3") +
-  geom_point(data = agreement, 
-             mapping = aes(x = s, y = mean_agreement)) + 
-  geom_text(data = agreement, 
-            mapping = aes(x = s,
-                   y = mean_agreement, 
-                   label = "ELS@H Data"),
-            nudge_x = 0.01, nudge_y = 0.025) + 
-  ggtitle("Mean Agreement vs. Proportion of Non-Zero Coefficients") +
-  xlab("Proportion of Non-Zero Coefficients") + 
-  ylab("Mean Agreement") + 
-  theme(plot.title = element_text(hjust = 0.5))
-
-p
-ggsave("/Users/thupham/Desktop/thesis/plots/agreement_s_2.png")
-```
-
-
-```{r}
-# "tidy F1"
-data_crashed_f1_2 <- collapsed_crash_snr_2 %>%
-  dplyr::select(snr, mean_F1_fixed, mean_F1_mixed) %>%
-  pivot_longer(cols = c(mean_F1_fixed, mean_F1_mixed), values_to = "F1",
-               names_to = "effects")
-
-```
-
-```{r}
-p <- ggplot(data = data_crashed_f1_2, 
-       mapping = aes(x = snr, y = F1,
-                     group = factor(effects),
-                     color = factor(effects))) + 
-  geom_line() +
-  ggtitle("Mean F1 Score vs. Signal-to-Noise Ratio") +
-  xlab("Signal-to-Noise Ratio") + 
-  ylab("Mean F1 Score") + 
-  theme(plot.title = element_text(hjust = 0.5),
+    geom_point() + 
+    geom_line() +
+    geom_ribbon(alpha = 0.25) +
+    ggtitle(paste("Mean", outcome_label[metric], "vs. SNR")) +
+    xlab("Signal-to-Noise-Ratio") + 
+    ylab(outcome_label[metric]) + 
+    theme(plot.title = element_text(hjust = 0.5,
+                                    size = 10),
         legend.position = 'bottom') + 
-  scale_color_manual(name = "Effects",
-                     labels=c('Fixed-Effects LASSO', 'Mixed-Effects LASSO'),
-                      values = c('olivedrab4', '#f032e6'))
+    scale_color_manual(name = "Effects",
+                     labels=c('Fixed-Effects LASSO', 
+                              'Mixed-Effects LASSO'),
+                      values = c("#56B4E9", "#CC79A7")) +
+    # facet_wrap(~cluster_var,
+    #          labeller = variable_labeller_2) 
+  
+  if (metric == "s_hat") {
+    p <- p + geom_hline(yintercept = 81, linetype = "dashed")
+  }
+  
+  p
+  
+  ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
+       metric, "_snr_cluster", ".png"))
+  
+  return()
+                 
+  
+}
 
-p
+tidy_plots_snr_c(two_agreements, "snr", "F1")
+tidy_plots_snr_c(two_agreements, "snr", "s_hat")
+tidy_plots_snr_c(two_agreements, "snr", "y_rmse")
+tidy_plots_snr_c(two_agreements, "snr", "beta_rmse")
 
-ggsave("/Users/thupham/Desktop/thesis/plots/F1_score_2.png", width = 5)
-```
-```{r}
-rmse <- data.frame(y_rmse = c(10.8713, 10.535),
-                   effects = factor(c("mixed", "fixed")),
-                   snr = rep(0.46, 2))
-```
-
-
-```{r}
-data_crashed_rmse_2 <- collapsed_crash_snr_2 %>%
-  dplyr::select(snr, mean_y_rmse_mixed, mean_y_rmse_fixed) %>%
-  pivot_longer(cols = c(mean_y_rmse_mixed, mean_y_rmse_fixed), 
-               values_to = "y_rmse",
-               names_to = "effects")
-```
-
-
-```{r}
-width_scale <- 8
-# ratio <- with(data_crashed_rmse_2, diff(range(snr))/diff(range(y_rmse)))
-p <- ggplot(data = data_crashed_rmse_2, 
-       mapping = aes(x = snr, y = y_rmse,
-                     group = factor(effects),
-                     color = factor(effects))) + 
-  geom_line() +
-  geom_point(data = rmse, 
-            mapping = aes(x = snr, y = y_rmse,
-                          group = factor(effects), 
-                          color = factor(effects)),
-            size = 3, 
-            alpha = 0.7) + 
-  ggtitle("Mean Predicted RMSE vs. Signal-to-Noise Ratio") +
-  xlab("Signal-to-Noise Ratio") + 
-  ylab("Mean Y-Hat RMSE") +
-  theme(plot.title = element_text(hjust = 0.5),
-        legend.position = 'bottom',
-        legend.text = element_text(size = 8)) +
-  guides(color = guide_legend(nrow=2,byrow=TRUE)) +
-  scale_color_manual(name = "",
-                     labels=c('Mixed-Effects LASSO on ELS@H', 
-                              'Fixed-Effects LASSO on Simulation',
-                              'Mixed-Effects LASSO on Simulation',
-                              'Fixed-Effects LASSO on ELS@H'),
-                     values = c('red3', 'olivedrab4',
-                                '#f032e6', 'deepskyblue2')) 
-  # coord_fixed(ratio=ratio)
- 
-p
-
-ggsave("/Users/thupham/Desktop/thesis/plots/rmse_2.png", width = 5)
-```
-
-```{r}
-data_crashed_beta_rmse_2 <- collapsed_crash_snr_2 %>%
-  dplyr::select(snr, mean_beta_rmse_mixed, mean_beta_rmse_fixed) %>%
-  pivot_longer(cols = c(mean_beta_rmse_mixed, mean_beta_rmse_fixed), 
-               values_to = "beta_rmse",
-               names_to = "effects")
-```
-
-
-```{r}
-p <- ggplot(data = data_crashed_beta_rmse_2, 
-       mapping = aes(x = snr, y = beta_rmse,
-                     group = factor(effects),
-                     color = factor(effects))) + 
-  geom_line() +
-  ggtitle("Mean Beta RMSE vs. Signal-to-Noise Ratio") +
-  xlab("Signal-to-Noise Ratio") + 
-  ylab("Mean Beta RMSE") + 
-  theme(plot.title = element_text(hjust = 0.5),
-        legend.position = 'bottom') + 
-  scale_color_manual(name = "Effects",
-                     labels=c('Fixed-Effects LASSO', 'Mixed-Effects LASSO'),
-                      values = c('olivedrab4', '#f032e6'))
-
-p
-
-ggsave("/Users/thupham/Desktop/thesis/plots/beta_rmse_2.png", width = 5)
-```
-
-
-## discarded plots
-
-```{r}
-# faceted plot -- agreement vs snr. faceted by number of non-zero predictors
-p <- ggplot(data = collapsed_crash_snr, 
-       mapping = aes(x = snr, y = mean_agreement)) + 
-  geom_line(color = "cadetblue3") + 
-  geom_point(color = "cadetblue3") +
-  geom_point(data = agreement, 
-             mapping = aes(x = snr, y = mean_agreement)) + 
-  geom_text(data = agreement, 
-            mapping = aes(x = snr,
-                   y = mean_agreement, 
-                   label = "ELS@H Data"),
-            nudge_x = 0.5, nudge_y = 0.025) + 
-  ggtitle("Mean Agreement vs. Signal-to-Noise Ratio") +
-  ylab("Mean Agreement") + 
-  xlab("Signal-to-Noise Ratio") + 
-  theme(plot.title = element_text(hjust = 0.5))
-
-p
-ggsave("/Users/thupham/Desktop/thesis/plots/agreement_snr.png")
-
-## need to look at the actual value of agreement (e.g., if it's around 55%) -- does that mean both models are dealing with randomness in different ways, and which 
-
-# TODO: ditch type 2 because pairwise covariance
-```
-
-
-```{r}
-# faceted plot -- agreement vs snr. faceted by number of non-zero predictors
-p <- ggplot(data = collapsed_crash_s, 
-       mapping = aes(x = s_prop, y = mean_agreement)) + 
-  geom_line(color = "cadetblue3") + 
-  geom_point(color = "cadetblue3") +
-  geom_point(data = agreement, 
-             mapping = aes(x = s, y = mean_agreement)) + 
-  geom_text(data = agreement, 
-            mapping = aes(x = s,
-                   y = mean_agreement, 
-                   label = "ELS@H Data"),
-            nudge_x = 0.01, nudge_y = 0.025) + 
-  ggtitle("Mean Agreement vs. Proportion of Non-Zero Coefficients") +
-  xlab("Proportion of Non-Zero Coefficients") + 
-  ylab("Mean Agreement") + 
-  theme(plot.title = element_text(hjust = 0.5))
-
-p
-ggsave("/Users/thupham/Desktop/thesis/plots/agreement_s.png")
 ```

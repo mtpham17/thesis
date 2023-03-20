@@ -24,7 +24,7 @@ library(purrr)
 library(misty)
 # root <- "/Users/thupham/Desktop/thesis/"
 root <- "/n/home04/thupham17/thesis/"
-snr_vec <- seq(0.05, 6, 0.5)
+# snr_vec <- seq(0.05, 6, 0.5)
 ```
 
 
@@ -635,7 +635,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, snr,
                            mean_noise, sigma_noise) 
   {
-    fname = paste0(root, "results/icc_scale/",
+    fname = paste0(root, "results/icc_scale_2/",
                chunkNo, "_", seed, ".rds")
     res = NA
     if (!file.exists(fname)) {
@@ -677,8 +677,8 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       J = 168,
                       alpha = 1/3,
                       type = 4,
-                      p = 169,
-                      s = 81,
+                      p = 185,
+                      s = 58,
                       default = 1,
                       cov_x = 0.05576108,
                       scale = seq(0, 6, by = 1),
@@ -788,7 +788,7 @@ concat_files <- function(pathname) {
 ```{r}
 # source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
 # pathname <- "/n/home04/thupham17/thesis/results/021323_run"
-pathname <- paste0(root, "results/icc_scale")
+pathname <- paste0(root, "results/icc_scale_2")
 if (TRUE) {
     # Run in parallel
   

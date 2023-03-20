@@ -582,7 +582,7 @@ data_processing <- function(data, cor_value, outcome, method = FALSE) {
 
 outcomes_use <- c("new_outcome", "gain_c_mefs_str", "gain_c_ltr_cogsoc_comp")
 # change this each time
-outcome <- outcomes_use[3]
+outcome <- outcomes_use[2]
 other_outcomes <- setdiff(outcomes, outcome)
 raw_full_data <- outcomes_and_obs_full_y1_largec %>%
 dplyr::select(-c(all_of(other_outcomes), caretype, classid, 
@@ -803,5 +803,30 @@ hist_coefs_zoom <- ggplot(all_coefs %>% filter(abs(Estimate) < 20),
   facet_wrap(~outcomes, ncol = 2, labeller = variable_labeller)
 
 hist_coefs_zoom
+```
+
+
+```{r}
+print(paste("MEFS Mixed:", length(mefs_nonzero_coefs_mixed)))
+print(paste("MEFS Fixed:", length(mefs_nonzero_coefs_fixed)))
+
+print(paste("Leiter Mixed:", length(ltr_nonzero_coefs_mixed)))
+print(paste("Leiter Fixed:", length(ltr_nonzero_coefs_fixed)))
+
+print(paste("PCA Mixed:", length(hybrid_nonzero_coefs_mixed)))
+print(paste("PCA Fixed:", length(hybrid_nonzero_coefs_fixed)))
+
+mefs_intersect <- intersect(mefs_nonzero_coefs_mixed, mefs_nonzero_coefs_fixed)
+ltr_intersect <- intersect(ltr_nonzero_coefs_mixed, ltr_nonzero_coefs_fixed)
+intersect(mefs_intersect, ltr_intersect)
+```
+
+```{r}
+new_outcome_coefs_df <- as.data.frame(new_outcome_coefs)
+mefs_coefs_df <- as.data.frame(mefs_coefs)
+ltr_coefs_df <- as.data.frame(ltr_coefs)
+sum(abs(new_outcome_coefs_df$Estimate) < 10)
+sum(abs(mefs_coefs_df$Estimate) < 10)
+sum(abs(ltr_coefs_df$Estimate) < 10)
 ```
 

@@ -719,7 +719,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       base_mean_x = 0,
                       sigma_x = 1,
                       mean_r = 0,
-                      sigma_r = c(1, 4),
+                      sigma_r = c(0.2, 4),
                       snr = seq(0.14, 4, by = 0.6),
                       # put this back in when done:
                       # snr = snr_vec,

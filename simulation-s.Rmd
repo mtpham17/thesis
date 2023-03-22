@@ -765,7 +765,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       sigma_x = 1,
                       mean_r = 0,
                       sigma_r = 0.2,
-                      snr = 1.28,
+                      snr = c(0.14, 3.74),
                       mean_noise = 0,
                       sigma_noise = 1)
 

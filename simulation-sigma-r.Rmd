@@ -530,7 +530,7 @@ analyze <- function(train_data, test_data, p, true_beta, default, snr) {
   
   y_hat_fixed_test <- predict(model_lasso_fixed, newx = X_fixed_test, 
                               s = model_lasso_fixed$lambda.min)
-  y_hat_mixed_train <- predict(model_lasso_mixed, newx = X_fixed_test, 
+  y_hat_mixed_test <- predict(model_lasso_mixed, newx = X_fixed_test, 
                                s = lambda_min)
   
   ind_to_exclude <- which((abs(true_beta) > default / 8) & (abs(true_beta) < default / 2))

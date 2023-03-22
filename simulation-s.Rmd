@@ -523,15 +523,14 @@ analyze <- function(train_data, test_data, p, true_beta, default, snr) {
                   (!coefficients_fixed_bool & !coefficients_mixed_bool)) / p
   
   y_hat_fixed_train <- predict(model_lasso_fixed, newx = X_fixed, s = model_lasso_fixed$lambda.min)
-  y_hat_mixed_train <- predict(model_lasso_mixed, newx = X_fixed, s = lambda_min)
+  y_hat_mixed_train <- predict(model_lasso_mixed, train_data)
   
   X_fixed_test <- model.matrix(formula, data = test_data)
   X_fixed_test <- X_fixed_test[, -1]
   
   y_hat_fixed_test <- predict(model_lasso_fixed, newx = X_fixed_test, 
                               s = model_lasso_fixed$lambda.min)
-  y_hat_mixed_test <- predict(model_lasso_mixed, newx = X_fixed_test, 
-                               s = lambda_min)
+  y_hat_mixed_test <- predict(model_lasso_mixed, test_data)
   
   ind_to_exclude <- which((abs(true_beta) > default / 8) & (abs(true_beta) < default / 2))
   

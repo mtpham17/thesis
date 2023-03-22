@@ -523,15 +523,14 @@ analyze <- function(train_data, test_data, p, true_beta, default, snr) {
                   (!coefficients_fixed_bool & !coefficients_mixed_bool)) / p
   
   y_hat_fixed_train <- predict(model_lasso_fixed, newx = X_fixed, s = model_lasso_fixed$lambda.min)
-  y_hat_mixed_train <- predict(model_lasso_mixed, newx = X_fixed, s = lambda_min)
+  y_hat_mixed_train <- predict(model_lasso_mixed, train_data)
   
   X_fixed_test <- model.matrix(formula, data = test_data)
   X_fixed_test <- X_fixed_test[, -1]
   
   y_hat_fixed_test <- predict(model_lasso_fixed, newx = X_fixed_test, 
                               s = model_lasso_fixed$lambda.min)
-  y_hat_mixed_test <- predict(model_lasso_mixed, newx = X_fixed_test, 
-                               s = lambda_min)
+  y_hat_mixed_test <- predict(model_lasso_mixed, test_data)
   
   ind_to_exclude <- which((abs(true_beta) > default / 8) & (abs(true_beta) < default / 2))
   
@@ -747,23 +746,23 @@ params <- params %>% mutate(
 # snr_vec <- seq(0.20, 4.28, 0.24)
 # icc <- rep(NA, length(snr_vec))
 # for (i in 1:length(snr_vec)) {
-#   test_df <- generate_data(n_bar = 3,
-#             J = 232,
-#             alpha = 1/3,
-#             type = 4,
-#             p = 185,
-#             s = 7,
-#             # s = 1:10,
-#             default = 1,
-#             cov_x = -0.0006,
-#             scale = 0.75,
-#             base_mean_x = 0,
-#             sigma_x = 1,
-#             mean_r = 0,
-#             sigma_r = 0.2,
-#             snr = 0.44,
-#             mean_noise = 0,
-#             sigma_noise = 1)
+  test_df <- generate_data(n_bar = 3,
+            J = 232,
+            alpha = 1/3,
+            type = 4,
+            p = 185,
+            s = 7,
+            # s = 1:10,
+            default = 1,
+            cov_x = -0.0006,
+            scale = 0.75,
+            base_mean_x = 0,
+            sigma_x = 1,
+            mean_r = 0,
+            sigma_r = 0.2,
+            snr = 0.44,
+            mean_noise = 0,
+            sigma_noise = 1)
 #   
 #   icc[i] <- multilevel.icc(test_df$Y, cluster = test_df$j)
 # }

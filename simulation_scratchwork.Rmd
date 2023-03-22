@@ -543,7 +543,7 @@ analyze <- function(train_data, test_data, p, true_beta, default, snr) {
   mixed_results <- perf_metrics(coefficients_mixed[-ind_to_exclude], 
                                 true_beta[-ind_to_exclude], 
                                 y_hat_mixed_train, train_data$Y,
-                                y_hat_fixed_test, test_data$Y,
+                                y_hat_mixed_test, test_data$Y,
                                 default, FALSE)
   
   errors <- list("errors_fixed_lasso" = errors_lasso_fixed,

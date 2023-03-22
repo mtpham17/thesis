@@ -109,33 +109,36 @@ generate_beta <- function(type, p, s, default = 1) {
     s <- p
   }
   
-  if (type == 1) {
-    # create roughly spaced indices, we want s betas to have a value of 1
-    indices <- seq(1, p, length.out = s)
-    betas <- rep(0, p)
-    betas[indices] <- 1
-    return(betas)
-  }
+  # if (type == 1) {
+  #   # create roughly spaced indices, we want s betas to have a value of 1
+  #   indices <- seq(1, p, length.out = s)
+  #   betas <- rep(0, p)
+  #   betas[indices] <- 1
+  #   return(betas)
+  # }
+  # 
+  # if (type == 2) {
+  #   return(c(seq(-10 * default, 0.5 * default, length.out = s), 
+  #            rep(0, p - s)))
+  # }
+  # 
+  # if (type == 3) {
+  #   return(c(seq(-10 * default, 10 * default, length.out = s), 
+  #            rep(0, p - s)))
+  # 
+  # }
+  # 
+  # # we add this condition because seq(n, n) gives us one number (instead of an empty
+  # # list), and we don't want an extra coefficient
+  # if (p == s) {
+  #   return(c(rep(default, s)))
+  # }
   
-  if (type == 2) {
-    return(c(seq(-10 * default, 0.5 * default, length.out = s), 
-             rep(0, p - s)))
-  }
-  
-  if (type == 3) {
-    return(c(seq(-10 * default, 10 * default, length.out = s), 
-             rep(0, p - s)))
-
-  }
-  
-  # we add this condition because seq(n, n) gives us one number (instead of an empty
-  # list), and we don't want an extra coefficient
-  if (p == s) {
-    return(c(rep(default, s)))
-  }
-  
-  return(c(rep(default, s), (default * 0.5)^seq(s + 1, p)))
+  strong <- sample(-10:10, s, replace = TRUE)
+  return(c(strong, (default * 0.5)^seq(1, p - s)))
 }
+
+generate_beta(4, 185, s = 87, default = 1)
 ```
 
 ```{r rmse}
@@ -232,32 +235,6 @@ generate_data <- function(n_bar, J, alpha,
               "default" = default,
               "p" = p))
 }
-
-test_generate <- generate_data(n_bar = 3,
-                      J = 232,
-                      alpha = 1/3,
-                      type = 4,
-                      p = 185,
-                      s = 7,
-                      # s = 1:10,
-                      default = 1,
-                      cov_x = 0.01597747,
-                      scale = 0.75,
-                      base_mean_x = 0,
-                      sigma_x = 1,
-                      mean_r = 0,
-                      sigma_r = 0.2,
-                      snr = 1.34,
-                      # put this back in when done:
-                      # snr = snr_vec,
-                      mean_noise = 0,
-                      sigma_noise = 1)
-
-# test_df <- test_generate$data
-# test_beta <- test_generate$betas
-# test_results <- analyze(data = test_generate$data, p = test_generate$p,
-#                         true_beta = test_generate$betas, default = test_generate$default,
-#                         snr = test_generate$snr)
 
 ```
 
@@ -432,9 +409,9 @@ perf_metrics <- function(beta_hat, beta_true,
   # anything in between is "indifferent?" can we just have anything greater than 
   # default / 2 as TRUE?
   
-  true_beta_categorical <- factor(beta_true > default / 2, 
+  true_beta_categorical <- factor(abs(beta_true) > default / 2, 
                                   levels = levels(factor(c(TRUE, FALSE))))
-  pred_beta_categorical <- factor(beta_hat > default / 2, 
+  pred_beta_categorical <- factor(abs(beta_hat) > default / 2, 
                                   levels = levels(factor(c(TRUE, FALSE))))
   
   cm <- confusionMatrix(pred_beta_categorical, true_beta_categorical,
@@ -556,11 +533,15 @@ analyze <- function(train_data, test_data, p, true_beta, default, snr) {
   y_hat_mixed_train <- predict(model_lasso_mixed, newx = X_fixed_test, 
                                s = lambda_min)
   
-  fixed_results <- perf_metrics(coefficients_fixed, true_beta, 
+  ind_to_exclude <- which((abs(true_beta) > default / 8) & (abs(true_beta) < default / 2))
+  
+  fixed_results <- perf_metrics(coefficients_fixed[-ind_to_exclude], 
+                                true_beta[-ind_to_exclude], 
                                 y_hat_fixed_train, train_data$Y,
                                 y_hat_fixed_test, test_data$Y,
                                 default, TRUE)
-  mixed_results <- perf_metrics(coefficients_mixed, true_beta, 
+  mixed_results <- perf_metrics(coefficients_mixed[-ind_to_exclude], 
+                                true_beta[-ind_to_exclude], 
                                 y_hat_mixed_train, train_data$Y,
                                 y_hat_fixed_test, test_data$Y,
                                 default, FALSE)
@@ -575,28 +556,6 @@ analyze <- function(train_data, test_data, p, true_beta, default, snr) {
                                        cluster = train_data$j)), 
            fixed_results, mixed_results))
 }
-
-# test_df <- generate_data(n_bar = 3,
-#                       J = 232,
-#                       alpha = 1/3,
-#                       type = 4,
-#                       p = 185,
-#                       s = 7,
-#                       # s = 1:10,
-#                       default = 1,
-#                       cov_x = 0.01597747,
-#                       scale = 0.75,
-#                       base_mean_x = 0,
-#                       sigma_x = 1,
-#                       mean_r = 0,
-#                       sigma_r = 0.2,
-#                       snr = 0.44,
-#                       mean_noise = 0,
-#                       sigma_noise = 1)
-# 
-# true_betas <- generate_beta(type = 4, p = 185, s = 7)
-# results <- analyze(data = test_df, p = 185, true_beta = true_betas,
-#                    default = 1, snr = 0.44)
 ```
 
 
@@ -612,13 +571,15 @@ one_run <- function(n_bar, J, alpha,
                     mean_noise = 0, sigma_noise = 1) {
   
   print("starting iteration")
-  generate <- generate_data(n_bar = n_bar, J = J, alpha = alpha, 
+  train <- generate_data(n_bar = n_bar, J = J, alpha = alpha, 
                     type = type, p = p, s = s, default = default,
                     cov_x = cov_x, scale = scale, base_mean_x = base_mean_x, 
                     sigma_x = sigma_x, 
                     mean_r = mean_r, sigma_r = sigma_r, 
                     snr = snr,
                     mean_noise = mean_noise, sigma_noise = sigma_noise)
+  
+  train_data <- train$data
   
   test <- generate_data(n_bar = n_bar, J = J, alpha = alpha, 
                     type = type, p = p, s = s, default = default,
@@ -628,31 +589,36 @@ one_run <- function(n_bar, J, alpha,
                     snr = snr,
                     mean_noise = mean_noise, sigma_noise = sigma_noise)
   
-  result <- analyze(train_data = generate$data, 
+  result <- analyze(train_data = train$data, 
                     test_data = test$data,
-                    p = generate$p, 
-                    true_beta = generate$betas, 
-                    default = generate$default, snr = generate$snr)
+                    p = train$p, 
+                    true_beta = train$betas, 
+                    default = train$default, snr = train$snr)
   return(result)
 }
 
-# one_run(n_bar = 3,
-#          J = 232,
-#          alpha = 1/3,
-#          type = 4,
-#          p = 185,
-#          s = 7,
-#          # s = 1:10,
-#          default = 1,
-#          cov_x = -0.0006,
-#          scale = 0.75,
-#          base_mean_x = 0,
-#          sigma_x = 1,
-#          mean_r = 0,
-#          sigma_r = 0.2,
-#          snr = 0.44,
-#          mean_noise = 0,
-#          sigma_noise = 1)
+one_run(n_bar = 3,
+        # J = 232,
+        J = 168,
+        alpha = 1/3,
+        type = 3,
+        p = 185,
+        # s = 7,
+        s = 81,
+        # s = 1:10,
+        default = 1,
+        cov_x = 0.05576108,
+        # cov_x = 0.01597747,
+        scale = 0.75,
+        base_mean_x = 0,
+        sigma_x = 1,
+        mean_r = 0,
+        sigma_r = 0.3,
+        snr = 0.14,
+        # put this back in when done:
+        # snr = snr_vec,
+        mean_noise = 0,
+        sigma_noise = 1)
 
 # if you keep getting weird results with the simulation, email dataset and short script to groll@statistik.tu-dortmund.de
 ```
@@ -714,7 +680,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, snr,
                            mean_noise, sigma_noise) 
   {
-    fname = paste0(root, "results/scale_with_test/",
+    fname = paste0(root, "results/snr_with_test/",
                chunkNo, "_", seed, ".rds")
     res = NA
     if (!file.exists(fname)) {

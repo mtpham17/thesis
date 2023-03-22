@@ -680,7 +680,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, snr,
                            mean_noise, sigma_noise) 
   {
-    fname = paste0(root, "results/snr_with_test/",
+    fname = paste0(root, "results/final_scale/",
                chunkNo, "_", seed, ".rds")
     res = NA
     if (!file.exists(fname)) {
@@ -723,7 +723,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       alpha = 1/3,
                       type = 4,
                       p = 185,
-                      s = 58,
+                      s = 81,
                       default = 1,
                       cov_x = 0.05576108,
                       scale = seq(0, 6, by = 1),
@@ -779,7 +779,7 @@ params <- params %>% mutate(
 ```{r}
 # sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
 debugging = FALSE
-sink(paste0(root, "logs/scale_with_test.txt"))
+sink(paste0(root, "logs/final_scale.txt"))
 
 params <- sample_n(params, nrow(params))
 tictoc::tic(paste(R, "iterations one set"))

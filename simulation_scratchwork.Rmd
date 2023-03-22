@@ -418,9 +418,13 @@ lambda_range_2 <- function(snr) {
 
 ```{r}
 library(caret)
-perf_metrics <- function(beta_hat, beta_true, y_hat, y_true, default, fixed) {
+perf_metrics <- function(beta_hat, beta_true,
+                         y_hat_train, y_true_train,
+                         y_hat_test, y_true_test,
+                         default, fixed) {
   
-  y_rmse <- rmse(y_hat, y_true)
+  y_rmse_train <- rmse(y_hat_train, y_true_train)
+  y_rmse_test <- rmse(y_hat_test, y_true_test)
   
   beta_rmse <- rmse(beta_hat, beta_true)
   
@@ -446,9 +450,11 @@ perf_metrics <- function(beta_hat, beta_true, y_hat, y_true, default, fixed) {
   
   s <- sum(beta_hat > default / 2)
   
-  results_list <- list(y_rmse, beta_rmse, sensitivity, specificity, 
+  results_list <- list(y_rmse_train, y_rmse_test, beta_rmse, 
+                       sensitivity, specificity, 
                        precision, recall, f, s)
-  names <- c("y_rmse", "beta_rmse", "sensitivity", "specificity", 
+  names <- c("y_rmse_train", "y_rmse_test", "beta_rmse", 
+             "sensitivity", "specificity", 
              "precision", "recall", "F1", "s_hat")
   if (fixed) {
     names(results_list) <- unlist(lapply(names, function(x) paste(x, "_fixed", 
@@ -476,14 +482,15 @@ quiet_mixed_lasso <- quietly(glmmLasso)
 
 ```{r}
 # Analyze
-analyze <- function(data, p, true_beta, default, snr) {
+analyze <- function(train_data, test_data, p, true_beta, default, snr) {
   var.names <- paste("X", 1:p, sep = "")
   formula <- as.formula(paste("Y ~", paste(var.names, collapse = " + ")))
   
-  X_fixed <- model.matrix(formula, data = data)
+  X_fixed <- model.matrix(formula, data = train_data)
   X_fixed <- X_fixed[, -1]
 
-  model_lasso_fixed <- quiet_fixed_lasso(x = X_fixed, y = data$Y, nfolds = 5, alpha = 1)
+  model_lasso_fixed <- quiet_fixed_lasso(x = X_fixed, y = train_data$Y, 
+                                         nfolds = 5, alpha = 1)
   errors_lasso_fixed <- sum(unlist(lapply(model_lasso_fixed[-1], function(x) ifelse(length(unname(x)) > 0, 1, 0)))) 
   # print(errors_lasso_fixed)
   model_lasso_fixed <- model_lasso_fixed$result
@@ -508,7 +515,7 @@ analyze <- function(data, p, true_beta, default, snr) {
   # print(l_range[1])
   # print(l_range[2])
   
-  best_lambda <- quiet_cv_glmmLasso(data = data,
+  best_lambda <- quiet_cv_glmmLasso(data = train_data,
                              formula = formula,
                              lambda_min = l_range[1], lambda_max =
                                l_range[2])
@@ -518,7 +525,7 @@ analyze <- function(data, p, true_beta, default, snr) {
   
   model_lasso_mixed <- quiet_mixed_lasso(fix = formula,
                                          rnd=list(j=~1),
-                                         data = data,
+                                         data = train_data,
                                          lambda=best_lambda,
                                          final.re = TRUE)
   print(paste("mixed LASSO errors:", model_lasso_mixed[-1]))
@@ -527,7 +534,7 @@ analyze <- function(data, p, true_beta, default, snr) {
   
   coefficients_mixed <- model_lasso_mixed$coefficients[2:(length(true_beta) + 1)]
 
-  basic_linear <- lm(formula, data = data)
+  basic_linear <- lm(formula, data = train_data)
   
   # "the two models agreed on ___ percent of the covariates" -- agreement defined as they both 
   # deemed a beta as non-zero out of the total significant betas.
@@ -538,12 +545,24 @@ analyze <- function(data, p, true_beta, default, snr) {
   agreement <- sum((coefficients_fixed_bool & coefficients_mixed_bool) |
                   (!coefficients_fixed_bool & !coefficients_mixed_bool)) / p
   
-  y_hat_fixed <- predict(model_lasso_fixed, newx = X_fixed, s = model_lasso_fixed$lambda.min)
-  y_hat_mixed <- predict(model_lasso_mixed, newx = X_fixed, s = lambda_min)
+  y_hat_fixed_train <- predict(model_lasso_fixed, newx = X_fixed, s = model_lasso_fixed$lambda.min)
+  y_hat_mixed_train <- predict(model_lasso_mixed, newx = X_fixed, s = lambda_min)
   
-  fixed_results <- perf_metrics(coefficients_fixed, true_beta, y_hat_fixed, data$Y,
+  X_fixed_test <- model.matrix(formula, data = test_data)
+  X_fixed_test <- X_fixed_test[, -1]
+  
+  y_hat_fixed_test <- predict(model_lasso_fixed, newx = X_fixed_test, 
+                              s = model_lasso_fixed$lambda.min)
+  y_hat_mixed_train <- predict(model_lasso_mixed, newx = X_fixed_test, 
+                               s = lambda_min)
+  
+  fixed_results <- perf_metrics(coefficients_fixed, true_beta, 
+                                y_hat_fixed_train, train_data$Y,
+                                y_hat_fixed_test, test_data$Y,
                                 default, TRUE)
-  mixed_results <- perf_metrics(coefficients_mixed, true_beta, y_hat_mixed, data$Y,
+  mixed_results <- perf_metrics(coefficients_mixed, true_beta, 
+                                y_hat_mixed_train, train_data$Y,
+                                y_hat_fixed_test, test_data$Y,
                                 default, FALSE)
   
   errors <- list("errors_fixed_lasso" = errors_lasso_fixed,
@@ -552,7 +571,8 @@ analyze <- function(data, p, true_beta, default, snr) {
   
   return(c(list("adj_r_squared" = summary(basic_linear)$adj.r.squared, 
                 "agreement" = agreement,
-                "icc" = multilevel.icc(data$Y, cluster = data$j)), 
+                "icc" = multilevel.icc(train_data$Y, 
+                                       cluster = train_data$j)), 
            fixed_results, mixed_results))
 }
 
@@ -600,10 +620,39 @@ one_run <- function(n_bar, J, alpha,
                     snr = snr,
                     mean_noise = mean_noise, sigma_noise = sigma_noise)
   
-  result <- analyze(data = generate$data, p = generate$p, true_beta = generate$betas, 
+  test <- generate_data(n_bar = n_bar, J = J, alpha = alpha, 
+                    type = type, p = p, s = s, default = default,
+                    cov_x = cov_x, scale = scale, base_mean_x = base_mean_x, 
+                    sigma_x = sigma_x, 
+                    mean_r = mean_r, sigma_r = sigma_r, 
+                    snr = snr,
+                    mean_noise = mean_noise, sigma_noise = sigma_noise)
+  
+  result <- analyze(train_data = generate$data, 
+                    test_data = test$data,
+                    p = generate$p, 
+                    true_beta = generate$betas, 
                     default = generate$default, snr = generate$snr)
   return(result)
 }
+
+one_run(n_bar = 3,
+         J = 232,
+         alpha = 1/3,
+         type = 4,
+         p = 185,
+         s = 7,
+         # s = 1:10,
+         default = 1,
+         cov_x = -0.0006,
+         scale = 0.75,
+         base_mean_x = 0,
+         sigma_x = 1,
+         mean_r = 0,
+         sigma_r = 0.2,
+         snr = 0.44,
+         mean_noise = 0,
+         sigma_noise = 1)
 
 # if you keep getting weird results with the simulation, email dataset and short script to groll@statistik.tu-dortmund.de
 ```
@@ -665,7 +714,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, snr,
                            mean_noise, sigma_noise) 
   {
-    fname = paste0(root, "results/icc_snr_2/",
+    fname = paste0(root, "results/icc_spurious_2/",
                chunkNo, "_", seed, ".rds")
     res = NA
     if (!file.exists(fname)) {
@@ -710,16 +759,16 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       type = 4,
                       p = 185,
                       # s = 7,
-                      s = 58,
+                      s = 81,
                       # s = 1:10,
                       default = 1,
                       cov_x = 0.05576108,
                       # cov_x = 0.01597747,
-                      scale = c(0.75, 6),
+                      scale = 6,
                       base_mean_x = 0,
                       sigma_x = 1,
                       mean_r = 0,
-                      sigma_r = c(0.2, 4),
+                      sigma_r = 4,
                       snr = seq(0.14, 4, by = 0.6),
                       # put this back in when done:
                       # snr = snr_vec,
@@ -734,43 +783,11 @@ params <- params %>% mutate(
 ```
 
 
-```{r}
-# snr_vec <- seq(0.20, 4.28, 0.24)
-# icc <- rep(NA, length(snr_vec))
-# for (i in 1:length(snr_vec)) {
-#   test_df <- generate_data(n_bar = 3,
-#             J = 232,
-#             alpha = 1/3,
-#             type = 4,
-#             p = 185,
-#             s = 7,
-#             # s = 1:10,
-#             default = 1,
-#             cov_x = -0.0006,
-#             scale = 0.75,
-#             base_mean_x = 0,
-#             sigma_x = 1,
-#             mean_r = 0,
-#             sigma_r = 0.2,
-#             snr = 0.44,
-#             mean_noise = 0,
-#             sigma_noise = 1)
-#   
-#   icc[i] <- multilevel.icc(test_df$Y, cluster = test_df$j)
-# }
-# 
-# plot(x = sigma_r_vec, y = icc)
-# abline(h = multilevel.icc(df_analysis_largec$gain_c_mefs_str, 
-#                           df_analysis_largec$provid))
-
-
-```
-
 
 ```{r}
 # sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
 debugging = FALSE
-sink(paste0(root, "logs/icc_snr_2.txt"))
+sink(paste0(root, "logs/icc_spurious_2.txt"))
 
 params <- sample_n(params, nrow(params))
 tictoc::tic(paste(R, "iterations one set"))
@@ -824,7 +841,7 @@ concat_files <- function(pathname) {
 ```{r}
 # source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
 # pathname <- "/n/home04/thupham17/thesis/results/021323_run"
-pathname <- paste0(root, "results/icc_snr_2")
+pathname <- paste0(root, "results/icc_spurious_2")
 if (TRUE) {
     # Run in parallel
   

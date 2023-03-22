@@ -595,28 +595,28 @@ one_run <- function(n_bar, J, alpha,
                     default = train$default, snr = train$snr)
   return(result)
 }
-# one_run(n_bar = 3,
-#         # J = 232,
-#         J = 168,
-#         alpha = 1/3,
-#         type = 3,
-#         p = 185,
-#         # s = 7,
-#         s = 58,
-#         # s = 1:10,
-#         default = 1,
-#         cov_x = 0.05576108,
-#         # cov_x = 0.01597747,
-#         scale = 6,
-#         base_mean_x = 0,
-#         sigma_x = 1,
-#         mean_r = 0,
-#         sigma_r = 0.3,
-#         snr = 0.14,
-#         # put this back in when done:
-#         # snr = snr_vec,
-#         mean_noise = 0,
-#         sigma_noise = 1)
+one_run(n_bar = 3,
+        # J = 232,
+        J = 168,
+        alpha = 1/3,
+        type = 3,
+        p = 185,
+        # s = 7,
+        s = 58,
+        # s = 1:10,
+        default = 1,
+        cov_x = 0.05576108,
+        # cov_x = 0.01597747,
+        scale = 6,
+        base_mean_x = 0,
+        sigma_x = 1,
+        mean_r = 0,
+        sigma_r = 0.3,
+        snr = 0.14,
+        # put this back in when done:
+        # snr = snr_vec,
+        mean_noise = 0,
+        sigma_noise = 1)
 
 
 # if you keep getting weird results with the simulation, email dataset and short script to groll@statistik.tu-dortmund.de
@@ -746,23 +746,23 @@ params <- params %>% mutate(
 # snr_vec <- seq(0.20, 4.28, 0.24)
 # icc <- rep(NA, length(snr_vec))
 # for (i in 1:length(snr_vec)) {
-  test_df <- generate_data(n_bar = 3,
-            J = 232,
-            alpha = 1/3,
-            type = 4,
-            p = 185,
-            s = 7,
-            # s = 1:10,
-            default = 1,
-            cov_x = -0.0006,
-            scale = 0.75,
-            base_mean_x = 0,
-            sigma_x = 1,
-            mean_r = 0,
-            sigma_r = 0.2,
-            snr = 0.44,
-            mean_noise = 0,
-            sigma_noise = 1)
+  # test_df <- generate_data(n_bar = 3,
+  #           J = 232,
+  #           alpha = 1/3,
+  #           type = 4,
+  #           p = 185,
+  #           s = 7,
+  #           # s = 1:10,
+  #           default = 1,
+  #           cov_x = -0.0006,
+  #           scale = 0.75,
+  #           base_mean_x = 0,
+  #           sigma_x = 1,
+  #           mean_r = 0,
+  #           sigma_r = 0.2,
+  #           snr = 0.44,
+  #           mean_noise = 0,
+  #           sigma_noise = 1)
 #   
 #   icc[i] <- multilevel.icc(test_df$Y, cluster = test_df$j)
 # }

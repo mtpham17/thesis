@@ -596,29 +596,29 @@ one_run <- function(n_bar, J, alpha,
                     default = train$default, snr = train$snr)
   return(result)
 }
+# one_run(n_bar = 3,
+#         # J = 232,
+#         J = 168,
+#         alpha = 1/3,
+#         type = 3,
+#         p = 185,
+#         # s = 7,
+#         s = 58,
+#         # s = 1:10,
+#         default = 1,
+#         cov_x = 0.05576108,
+#         # cov_x = 0.01597747,
+#         scale = 6,
+#         base_mean_x = 0,
+#         sigma_x = 1,
+#         mean_r = 0,
+#         sigma_r = 0.3,
+#         snr = 0.14,
+#         # put this back in when done:
+#         # snr = snr_vec,
+#         mean_noise = 0,
+#         sigma_noise = 1)
 
-one_run(n_bar = 3,
-        # J = 232,
-        J = 168,
-        alpha = 1/3,
-        type = 3,
-        p = 185,
-        # s = 7,
-        s = 58,
-        # s = 1:10,
-        default = 1,
-        cov_x = 0.05576108,
-        # cov_x = 0.01597747,
-        scale = 6,
-        base_mean_x = 0,
-        sigma_x = 1,
-        mean_r = 0,
-        sigma_r = 0.3,
-        snr = 0.14,
-        # put this back in when done:
-        # snr = snr_vec,
-        mean_noise = 0,
-        sigma_noise = 1)
 
 # if you keep getting weird results with the simulation, email dataset and short script to groll@statistik.tu-dortmund.de
 ```
@@ -680,7 +680,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, snr,
                            mean_noise, sigma_noise) 
   {
-    fname = paste0(root, "results/snr_with_test/",
+    fname = paste0(root, "results/final_sigma_r/",
                chunkNo, "_", seed, ".rds")
     res = NA
     if (!file.exists(fname)) {
@@ -723,7 +723,7 @@ params <- expand.grid(chunkNo = 1:M_CHUNK,
                       alpha = 1/3,
                       type = 4,
                       p = 185,
-                      s = 58,
+                      s = 81,
                       default = 1,
                       cov_x = 0.05576108,
                       scale = 0.75,
@@ -779,7 +779,7 @@ params <- params %>% mutate(
 ```{r}
 # sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
 debugging = FALSE
-sink(paste0(root, "logs/sigma_r_with_test.txt"))
+sink(paste0(root, "logs/final_sigma_r.txt"))
 
 params <- sample_n(params, nrow(params))
 tictoc::tic(paste(R, "iterations one set"))

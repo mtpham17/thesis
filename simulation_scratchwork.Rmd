@@ -680,7 +680,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, snr,
                            mean_noise, sigma_noise) 
   {
-    fname = paste0(root, "results/snr_with_test/",
+    fname = paste0(root, "results/final_snr/",
                chunkNo, "_", seed, ".rds")
     res = NA
     if (!file.exists(fname)) {
@@ -753,7 +753,7 @@ params <- params %>% mutate(
 ```{r}
 # sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
 debugging = FALSE
-sink(paste0(root, "logs/snr_with_test.txt"))
+sink(paste0(root, "logs/final_snr.txt"))
 
 params <- sample_n(params, nrow(params))
 tictoc::tic(paste(R, "iterations one set"))

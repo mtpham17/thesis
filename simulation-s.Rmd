@@ -636,23 +636,23 @@ one_run <- function(n_bar, J, alpha,
   return(result)
 }
 
-one_run(n_bar = 3,
-         J = 232,
-         alpha = 1/3,
-         type = 4,
-         p = 185,
-         s = 7,
-         # s = 1:10,
-         default = 1,
-         cov_x = -0.0006,
-         scale = 0.75,
-         base_mean_x = 0,
-         sigma_x = 1,
-         mean_r = 0,
-         sigma_r = 0.2,
-         snr = 0.44,
-         mean_noise = 0,
-         sigma_noise = 1)
+# one_run(n_bar = 3,
+#          J = 232,
+#          alpha = 1/3,
+#          type = 4,
+#          p = 185,
+#          s = 7,
+#          # s = 1:10,
+#          default = 1,
+#          cov_x = -0.0006,
+#          scale = 0.75,
+#          base_mean_x = 0,
+#          sigma_x = 1,
+#          mean_r = 0,
+#          sigma_r = 0.2,
+#          snr = 0.44,
+#          mean_noise = 0,
+#          sigma_noise = 1)
 
 # if you keep getting weird results with the simulation, email dataset and short script to groll@statistik.tu-dortmund.de
 ```
@@ -714,7 +714,7 @@ file_saving_sim = function(chunkNo, seed, reps,
                            mean_r, sigma_r, snr,
                            mean_noise, sigma_noise) 
   {
-    fname = paste0(root, "results/icc_spurious_2/",
+    fname = paste0(root, "results/scale_with_test/",
                chunkNo, "_", seed, ".rds")
     res = NA
     if (!file.exists(fname)) {
@@ -813,7 +813,7 @@ params <- params %>% mutate(
 ```{r}
 # sink("/n/home04/thupham17/thesis/logs/output_test_run_2.txt")
 debugging = FALSE
-sink(paste0(root, "logs/new_outcome_scale.txt"))
+sink(paste0(root, "logs/scale_with_test.txt"))
 
 params <- sample_n(params, nrow(params))
 tictoc::tic(paste(R, "iterations one set"))
@@ -867,7 +867,7 @@ concat_files <- function(pathname) {
 ```{r}
 # source: https://michaelinom.medium.com/how-to-combine-all-csv-files-from-the-same-folder-into-one-data-frame-automatically-with-r-1775876a876c
 # pathname <- "/n/home04/thupham17/thesis/results/021323_run"
-pathname <- paste0(root, "results/icc_scale_2")
+pathname <- paste0(root, "results/scale_with_test")
 if (TRUE) {
     # Run in parallel
   

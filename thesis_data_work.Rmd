@@ -72,6 +72,8 @@ y1_coverpage_obs <- read.dta13("y1o_coverpage.dta")
 
 y1_child_obs <- y1_child_obs_raw %>%
   mutate(cid = ifelse(childid == "N/A", o_c_uniqueid, childid)) %>%
+  mutate_at(vars(starts_with('o_c')), function(x) as.factor(x)) %>%
+  mutate(across(c(is.numeric, -contains("id")),  ~ scale(.)[,1])) %>%
   group_by(cid, classid) %>%
   mutate(nsweeps = n()) %>%
   mutate_at(vars(o_c_verbal:o_c_focus), as.character) %>% 
@@ -102,6 +104,8 @@ y1_child_obs <- y1_child_obs_raw %>%
 
 #Re-format the teacher data so that it is one row per class
 y1_teacher_obs <- y1_teacher_obs_raw %>% 
+  mutate_at(vars(starts_with('o_t')), function(x) as.factor(x)) %>% 
+  mutate(across(c(is.numeric, -contains("id")),  ~ scale(.)[,1])) %>%
   dummy_cols(select_columns = c("o_t_verbal_o", "o_t_whom_o", "o_t_schedule_o",
                                 "o_t_task_o", "o_t_instruct", "o_t_focus_o",
                                 "o_t_tone_o", "o_t_attention_o", "o_t_es_o"),
@@ -118,7 +122,9 @@ y1_teacher_obs <- y1_teacher_obs_raw %>%
   ungroup
 
 #Merge teacher and child observations 
-y1_obs <- left_join(y1_child_obs, y1_teacher_obs, by = "classid")
+y1_obs <- left_join(y1_child_obs, y1_teacher_obs, by = "classid") %>%
+  mutate(across(c(starts_with("n")),  ~ scale(.)[,1]))
+  
 
 ```
 
@@ -215,13 +221,13 @@ gain_ind <- which(startsWith(colnames(outcomes_and_obs_full_y1), "gain"))
 
 
 ```{r outcomes_corrplot, echo=TRUE, fig.height=8, cache=TRUE}
-res <- cor(outcomes_and_obs_full_y1_largec[, gain_ind],
+res <- cor(outcomes_and_obs_full_y1[, gain_ind],
            use="complete.obs")
 # invert correlation matrix; the diagonal elements give us the correlation of that outcome to the rest of the outcomes: http://www2.tulane.edu/~PsycStat/dunlap/Psyc613/RI2.html#:~:text=The%20Inverted%20Correlation%20Matrix%20%2D%2D&text=When%20the%20measures%20are%20correlated,volume%20is%20less%20than%201.&text=Therefore%2C%20the%20diagonal%20elements%20allow,other%20variables%20in%20the%20set.
 
 inv <-solve(res)
 diag(inv)
-outcomes_use_y1 <- colnames(outcomes_and_obs_full_y1_largec)[gain_ind][order(diag(inv))[1:3]]
+outcomes_use_y1 <- colnames(outcomes_and_obs_full_y1)[gain_ind][order(diag(inv))[1:3]]
 
 # results: "gain_c_mefs_str" "gain_c_wjlw_str" "gain_c_wjap_str" --> 
 # MEFS Z-score, WJ Letter Word ID, WJ Applied Problems
@@ -243,16 +249,15 @@ dim(outcomes_and_obs_full_y1)
 
 
 ```{r}
-outcomes_and_obs_full_y1_largec <-  outcomes_and_obs_full_y1 
-outcomes_vals <- outcomes_and_obs_full_y1_largec[gain_ind] 
-pca_results <- prcomp(outcome_vals, scale = TRUE)
+data_no_na <- outcomes_and_obs_full_y1 %>% drop_na()
+outcomes_vals <- data_no_na[gain_ind]
+pca_results <- prcomp(outcomes_vals, scale = TRUE)
 pc1 <- pca_results$rotation[, 1]
 
 new_outcome <- rowSums(sweep(outcomes_vals, 2, pc1, "*"))
 
-outcomes_and_obs_full_y1_largec <- cbind(outcomes_and_obs_full_y1_largec,
-                                         new_outcome)
-outcomes <- c(colnames(outcomes_and_obs_full_y1_largec[, gain_ind]),
+outcomes_and_obs_full_y1_new <- cbind(data_no_na, new_outcome)
+outcomes <- c(colnames(outcomes_and_obs_full_y1[, gain_ind]),
               "new_outcome")
 ```
 
@@ -263,43 +268,43 @@ outcomes <- c(colnames(outcomes_and_obs_full_y1_largec[, gain_ind]),
 # for preliminary empirical results, thesis
 #TODO 2/28: need to figure out why I did this weird standardization thing
 
-models_y1_use <- list()
-coefficients_model_y1_use <- list()
-for (outcome in outcomes_use_y1) {
-  other_outcomes <- outcomes[outcomes != outcome]
-  df_analysis <- outcomes_and_obs_full_y1 %>%
-    filter(!is.na(outcomes_and_obs_full_y1[[outcome]])) %>%
-    # make sure to not use cid, because it's basically just the row number at this point
-    dplyr::select(-c(other_outcomes, cid))
-  allSd <- apply(df_analysis[, -1], 2, sd)
-  var.names <- colnames(df_analysis)[-c(1, which(colnames(df_analysis) == "provid"))]
-  # var.names <- var.names[1:10]
-  formula <- as.formula(paste(outcome, "~", paste(var.names, collapse= " + ")))
-  x = model.matrix(formula, data = df_analysis)
-  
-  y = df_analysis[[outcome]]
-  x = x[, -1]
-  
-
-  # call cv.glmnet()
-  model_lasso <- cv.glmnet(x = x, y = y, alpha = 1)
-  # plot(model_lasso)
-  
-  models_y1_use[[outcome]] <- model_lasso
-  cc_y1_use = coef(model_lasso, s = model_lasso$lambda.min)
-  print(model_lasso$lambda.min)
-
-  # print out the model coefficients and store in a list.
-  # exclude the intercept
-  cc_y1_use = cc_y1_use[cc_y1_use[,1]!=0,1][-1]
-  # remove backticks for ease of standardizing
-  names(cc_y1_use)<- gsub("`","", names(cc_y1_use))
-  coefficients_model_y1_use[[outcome]] <- cc_y1_use * allSd[names(cc_y1_use)]
-  # print(cc)
-
-}
-
-## THESE ARE THE COEFFICIENTS FOR Y1: coefficients_model_y1_use
+# models_y1_use <- list()
+# coefficients_model_y1_use <- list()
+# for (outcome in outcomes_use_y1) {
+#   other_outcomes <- outcomes[outcomes != outcome]
+#   df_analysis <- outcomes_and_obs_full_y1 %>%
+#     filter(!is.na(outcomes_and_obs_full_y1[[outcome]])) %>%
+#     # make sure to not use cid, because it's basically just the row number at this point
+#     dplyr::select(-c(other_outcomes, cid))
+#   allSd <- apply(df_analysis[, -1], 2, sd)
+#   var.names <- colnames(df_analysis)[-c(1, which(colnames(df_analysis) == "provid"))]
+#   # var.names <- var.names[1:10]
+#   formula <- as.formula(paste(outcome, "~", paste(var.names, collapse= " + ")))
+#   x = model.matrix(formula, data = df_analysis)
+#   
+#   y = df_analysis[[outcome]]
+#   x = x[, -1]
+#   
+# 
+#   # call cv.glmnet()
+#   model_lasso <- cv.glmnet(x = x, y = y, alpha = 1)
+#   # plot(model_lasso)
+#   
+#   models_y1_use[[outcome]] <- model_lasso
+#   cc_y1_use = coef(model_lasso, s = model_lasso$lambda.min)
+#   print(model_lasso$lambda.min)
+# 
+#   # print out the model coefficients and store in a list.
+#   # exclude the intercept
+#   cc_y1_use = cc_y1_use[cc_y1_use[,1]!=0,1][-1]
+#   # remove backticks for ease of standardizing
+#   names(cc_y1_use)<- gsub("`","", names(cc_y1_use))
+#   coefficients_model_y1_use[[outcome]] <- cc_y1_use * allSd[names(cc_y1_use)]
+#   # print(cc)
+# 
+# }
+# 
+# ## THESE ARE THE COEFFICIENTS FOR Y1: coefficients_model_y1_use
 ```
 
 
@@ -397,53 +402,6 @@ lambda_range <- function(data, formula, p,
 }
 ```
 
-
-
-```{r}
-library(caret)
-perf_metrics <- function(beta_hat, beta_true, y_hat, y_true, default, fixed) {
-  
-  y_rmse <- rmse(y_hat, y_true)
-  
-  beta_rmse <- rmse(beta_hat, beta_true)
-  
-  # rewrite beta values as 0 (less than default / 2) and 1 (greater than default)
-  # anything in between is "indifferent?" can we just have anything greater than 
-  # default / 2 as TRUE?
-  
-  true_beta_categorical <- factor(beta_true > default / 2, 
-                                  levels = levels(factor(c(TRUE, FALSE))))
-  pred_beta_categorical <- factor(beta_hat > default / 2, 
-                                  levels = levels(factor(c(TRUE, FALSE))))
-  
-  cm <- confusionMatrix(pred_beta_categorical, true_beta_categorical,
-                mode = "everything",
-                positive="TRUE")
-  
-  # previously, true positive/negative
-  sensitivity <- unname(cm$byClass["Sensitivity"])
-  specificity <- unname(cm$byClass["Specificity"])
-  precision <- unname(cm$byClass["Precision"])
-  recall <- unname(cm$byClass["Recall"])
-  f <- unname(cm$byClass["F1"])
-  
-  results_list <- list(y_rmse, beta_rmse, sensitivity, specificity, 
-                       precision, recall, f)
-  names <- c("y_rmse", "beta_rmse", "sensitivity", "specificity", 
-             "precision", "recall", "F1")
-  if (fixed) {
-    names(results_list) <- unlist(lapply(names, function(x) paste(x, "_fixed", 
-                                                                  sep = "")))
-  }
-  
-  else {
-    names(results_list) <- unlist(lapply(names, function(x) paste(x, "_mixed", 
-                                                                  sep = "")))
-  }
-  
-  return(results_list)
-}
-```
 
 # see brainstorming in scratch_data_work.Rmd -- decided on some pre-processing with LASSO 0.1 and then removing columns with pairwise correlation greater than 0.95
 
@@ -579,175 +537,116 @@ data_processing <- function(data, cor_value, outcome, method = FALSE) {
   
   return(df_analysis_noncor_nonlinear)
 }
-
-outcomes_use <- c("new_outcome", "gain_c_mefs_str", "gain_c_ltr_cogsoc_comp")
-# change this each time
-outcome <- outcomes_use[2]
-other_outcomes <- setdiff(outcomes, outcome)
-raw_full_data <- outcomes_and_obs_full_y1_largec %>%
-dplyr::select(-c(all_of(other_outcomes), caretype, classid, 
-                 cid, nsweeps.y,
-                 actualtype, nsweeps.x)) %>%
-  mutate(provid = as.factor(provid)) %>%
-  drop_na(outcome)
-df_analysis_largec <- as.data.frame(data_processing(raw_full_data,
-                                      cor_value = 0.80, outcome = outcome))
 ```
 
-## try 2-fold cross validation to see if this fixes the rank issue
-
-```{r}
-
-x = model.matrix(as.formula(paste(outcome, "~ . - provid")), 
-                   data = df_analysis_largec)
-  
-y = df_analysis_largec[[outcome]]
-x = x[, -1]
-
-coefs_for_glm <- head(colnames(df_analysis_largec), -2)
-formula <- as.formula(paste(outcome, "~", paste(coefs_for_glm, 
-                                              collapse = " + ")))
-
-fixed_lasso <- cv.glmnet(x = x, y = y, alpha = 1, type.measure = "mse")
-coefs_fixed <- coef(fixed_lasso, s = "lambda.min")[-1]
-nonzero_coefs_fixed <- which(coefs_fixed != 0)
-nonzero_coefs_fixed <- coefs_for_glm[nonzero_coefs_fixed]
-
-l_range <- lambda_range(data = df_analysis_largec,
-                        formula = formula, 
-                        p = length(coefs_for_glm))
-best_lambda <- cv_glmmLasso(df_analysis_largec, formula,
-                            rand = list(provid = ~1),
-                            lambda_step = 20, lambda_min = l_range[1],
-                            lambda_max = l_range[2], kk = 5)
-mixed_lasso <- glmmLasso(data = df_analysis_largec, fix = formula, 
-                         rnd = list(provid=~1), lambda = best_lambda)
-coefs_mixed <- mixed_lasso$coefficients[-1]
-nonzero_coefs_mixed <- names(coefs_mixed[coefs_mixed != 0])
-
-agreement <- sum((coefs_fixed == 0 & coefs_mixed == 0) | 
-                   (coefs_fixed != 0 & coefs_mixed != 0)) / length(coefs_for_glm)
-
-```
 
 ## exploring data to understand what kind of simulation to run
 
 ```{r}
-coefs <- summary(lm(as.formula(paste(outcome, "~ . - provid")),
-   data = df_analysis_largec, na.action = na.exclude))$coefficients
+outcomes_use <- c("new_outcome", "gain_c_mefs_str", "gain_c_ltr_cogsoc_comp")
+# change this each time
 
-coefs_df <- as.data.frame(coefs)
+data_results <- list()
 
-p1 <- ggplot(coefs_df, mapping = aes(x = Estimate)) +
-  geom_histogram(color = "black", fill = "#FF9999") +   
-  ggtitle("Histogram of Coefficients from Basic Linear Regression") +
-  ylab("Frequency") + 
-  xlab("Coefficients from Basic Linear Regression") + 
-  theme(plot.title = element_text(hjust = 0.5))
+for (outcome in outcomes_use) {
+  
+  if (outcome == "new_outcome") {
+    other_outcomes <- setdiff(outcomes, outcome)
+    raw_full_data <- outcomes_and_obs_full_y1_new %>%
+    dplyr::select(-c(all_of(other_outcomes), caretype, classid, 
+               cid, nsweeps.y,
+               actualtype, nsweeps.x)) %>%
+    mutate(provid = as.factor(provid)) %>%
+      drop_na(outcome)
+  }
+  else {
+    other_outcomes <- setdiff(outcomes, outcome)
+    other_outcomes <- other_outcomes[! other_outcomes %in% c('new_outcome')]
+    raw_full_data <- outcomes_and_obs_full_y1 %>%
+  dplyr::select(-c(all_of(other_outcomes), caretype, classid, 
+                   cid, nsweeps.y,
+                   actualtype, nsweeps.x)) %>%
+    mutate(provid = as.factor(provid)) %>%
+    drop_na(outcome)
+  }
+  c_value <- ifelse(outcome == "gain_c_ltr_cogsoc_comp", 0.80, 0.95)
+  df_analysis_largec <- as.data.frame(data_processing(raw_full_data,
+                                        cor_value = c_value, outcome = outcome))
+  
+  x = model.matrix(as.formula(paste(outcome, "~ . - provid")), 
+                   data = df_analysis_largec)
+  
+  y = df_analysis_largec[[outcome]]
+  x = x[, -1]
+  
+  coefs_for_glm <- head(colnames(df_analysis_largec), -2)
+  formula <- as.formula(paste(outcome, "~", paste(coefs_for_glm, 
+                                                collapse = " + ")))
+  
+  fixed_lasso <- cv.glmnet(x = x, y = y, alpha = 1, type.measure = "mse")
+  coefs_fixed <- coef(fixed_lasso, s = "lambda.min")[-1]
+  nonzero_coefs_fixed <- which(coefs_fixed != 0)
+  nonzero_coefs_fixed <- coefs_for_glm[nonzero_coefs_fixed]
+  
+  l_range <- lambda_range(data = df_analysis_largec,
+                          formula = formula, 
+                          p = length(coefs_for_glm))
+  best_lambda <- cv_glmmLasso(df_analysis_largec, formula,
+                              rand = list(provid = ~1),
+                              lambda_step = 20, lambda_min = l_range[1],
+                              lambda_max = l_range[2], kk = 5)
+  mixed_lasso <- glmmLasso(data = df_analysis_largec, fix = formula, 
+                           rnd = list(provid=~1), lambda = best_lambda)
+  coefs_mixed <- mixed_lasso$coefficients[-1]
+  nonzero_coefs_mixed <- names(coefs_mixed[coefs_mixed != 0])
+  
+  agreement <- sum((coefs_fixed == 0 & coefs_mixed == 0) | 
+                     (coefs_fixed != 0 & coefs_mixed != 0)) / 
+    length(coefs_for_glm)
+  
+  one_result <- list("coefs_fixed" = coefs_fixed,
+                     "coefs_mixed" = coefs_mixed,
+                     "agreement" = agreement,
+                     "data" = df_analysis_largec)
+  
+  data_results[[outcome]] <- one_result
+}
 
-p1
-ggsave("/Users/thupham/Desktop/thesis/plots/linear_reg_coefs.png")
-
-
-  # hist(coefs_df$Estimate)
-
-p2 <- ggplot(coefs_df[coefs_df$Estimate < 20 & coefs_df$Estimate > -20, ],
-             mapping = aes(x = Estimate)) +
-  geom_histogram(color = "black", fill = "#FF9999") +
-  ggtitle("Histogram of Most Coefficients from Basic Linear Regression") +
-  ylab("Frequency") +
-  xlab("Coefficients from Basic Linear Regression (Between -10 and 10)") +
-  theme(plot.title = element_text(hjust = 0.5))
-# looks like beta type 4 with some scaling? default = 50?
-
-p2
-ggsave("/Users/thupham/Desktop/thesis/plots/linear_reg_coefs_zoom.png")
-
-# generate_data(n_bar, J, alpha, 
-#                     type, p, s, default,
-#                     cov_x, scale, base_mean_x = 0, sigma_x = 1, 
-#                     mean_r = 0, sigma_r, 
-#                     snr,
-#                     mean_noise = 0, sigma_noise = 1)
-
-clusters <- df_analysis_largec %>% group_by(provid) %>% summarize(n = n()) %>% ungroup()
-
-
-p3 <- ggplot(clusters,
-             mapping = aes(x = n)) +
-  geom_histogram(color = "black", fill = "#FF9999") +
-  ggtitle("Histogram of Size of Clusters") +
-  ylab("Frequency") +
-  xlab("Cluster Size") +
-  theme(plot.title = element_text(hjust = 0.5))
-
-p3 
-ggsave("/Users/thupham/Desktop/thesis/plots/cluster_size.png")
-
-nrow(clusters)
-# J = 232 --> let's round this down to 50 for now lol
-mean(clusters$n)
-# n_bar = 3
-var(clusters$n)
-var(clusters$n[clusters$n < 6])
-# alpha = 1/3?
-
-ggplot(data = df_analysis_largec, 
-       mapping = aes(y = nclass)) +
-  geom_histogram()
-
-r2 <- summary(lm(as.formula(paste(outcome, "~ . - provid")),
-   data = df_analysis_largec, na.action = na.exclude))$r.squared
-# r squared value is 0.315
-snr <- r2 / (1 - r2)
-# snr value is 0.458766
-
-# there are so many clusters? just assume scale = 1 for now...
-
-# 220 predictors.
-# round down to 110?
-
-cor <- cor(as.matrix(select_if(df_analysis_largec, is.numeric)))
-std <- apply(select_if(df_analysis_largec, is.numeric), 2, 
-             function(x) sqrt(var(x)))
-cov <- cor * std * cor
-(sum(cov[1, ], na.rm = TRUE) - 1) / ncol(select_if(df_analysis_largec,
-                                                   is.numeric))
-# cov_x = -0.0004
 ```
 
-
-- type 4
-- p = 110
-- s = 7
-- default = 50
-- cov_x = -0.0004
-- scale = 1?
-- snr = 0.46
-
-
 ```{r}
-all_coefs <- rbind(as.data.frame(mefs_coefs), 
-                   as.data.frame(ltr_coefs),
-                   as.data.frame(new_outcome_coefs))
-
-all_coefs$outcomes <- factor(c(rep("mefs", nrow(mefs_coefs)),
-                               rep("ltr", nrow(ltr_coefs)),
-                               rep("new", nrow(new_outcome_coefs))))
-
-write.csv(all_coefs, 
-          "/Users/thupham/Desktop/thesis/outcomes_coefs.csv")
-
-all_clusters <- rbind(as.data.frame(mefs_clusters), 
-                   as.data.frame(ltr_clusters),
-                   as.data.frame(new_outcome_clusters))
-
-all_clusters$outcomes <- factor(c(rep("mefs", nrow(mefs_clusters)),
-                               rep("ltr", nrow(ltr_clusters)),
-                               rep("new", nrow(new_outcome_clusters))))
-
-write.csv(all_clusters, 
-          "/Users/thupham/Desktop/thesis/outcomes_clusters.csv")
+# trying to figure out data stuff
+data_characteristics <- list()
+for (outcome in outcomes_use) {
+  df_analysis <- data_results[[outcome]]$data
+  coefs <- summary(lm(as.formula(paste(outcome, "~ . - provid")),
+   data = df_analysis, na.action = na.exclude))$coefficients
+  coefs_df <- as.data.frame(coefs)
+  clusters <- df_analysis %>% 
+    group_by(provid) %>% 
+    summarize(n = n()) %>% 
+    ungroup()
+  
+  r2 <- summary(lm(as.formula(paste(outcome, "~ . - provid")),
+   data = df_analysis, na.action = na.exclude))$r.squared
+  # r squared value is 0.315
+  snr <- r2 / (1 - r2)
+  
+  cor <- cor(as.matrix(select_if(df_analysis_largec, is.numeric)))
+  std <- apply(select_if(df_analysis_largec, is.numeric), 2, 
+               function(x) sqrt(var(x)))
+  cov <- cor * std * cor
+  cov_x <- (sum(cov[1, ], na.rm = TRUE) - 1) / ncol(select_if(df_analysis_largec,
+                                                     is.numeric))
+  
+  one_result <- list("coefs" = coefs_df,
+                     "clusters" = clusters,
+                     "snr" = snr,
+                     "cov_x" = cov_x)
+  
+  data_characteristics[[outcome]] <- one_result
+  
+}
 ```
 
 
@@ -763,6 +662,66 @@ variable_labeller <- function(variable, value){
   return(variable_names[value])
 }
 ```
+
+```{r}
+coefficients <- rbind(data_characteristics$gain_c_mefs_str$coefs[-1,],
+                      data_characteristics$new_outcome$coefs[-1, ],
+                      data_characteristics$gain_c_ltr_cogsoc_comp$coefs[-1, ]) %>%
+  mutate("outcome" = 
+           factor(c(rep("mefs", nrow(data_characteristics$gain_c_mefs_str$coefs[-1, ])),
+         rep("new", nrow(data_characteristics$new_outcome$coefs[-1, ])),
+             rep("ltr", nrow(data_characteristics$gain_c_ltr_cogsoc_comp$coefs[-1, ])))))
+
+p1 <- ggplot(coefficients, mapping = aes(x = Estimate)) +
+  geom_histogram(color = "black", fill = "#FF9999") +   
+  ggtitle("Histogram of Coefficients from Basic Linear Regression") +
+  ylab("Frequency") + 
+  xlab("Coefficients from Basic Linear Regression") + 
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  facet_wrap(~outcome,
+             labeller = variable_labeller,
+             ncol = 2)
+
+p1
+ggsave("/Users/thupham/Desktop/thesis/plots/linear_reg_coefs.png")
+```
+
+
+```{r}
+clusters <- rbind(data_characteristics$gain_c_mefs_str$clusters,
+                  data_characteristics$new_outcome$clusters,
+                  data_characteristics$gain_c_ltr_cogsoc_comp$clusters) %>%
+  mutate("outcome" = 
+           factor(c(rep("mefs", nrow(data_characteristics$gain_c_mefs_str$clusters)),
+         rep("new", nrow(data_characteristics$new_outcome$clusters)),
+             rep("ltr", nrow(data_characteristics$gain_c_ltr_cogsoc_comp$clusters)))))
+
+p3 <- ggplot(clusters,
+             mapping = aes(x = n)) +
+  geom_histogram(color = "black", fill = "#FF9999") +
+  ggtitle("Histogram of Size of Clusters") +
+  ylab("Frequency") +
+  xlab("Cluster Size") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(~outcome,
+           labeller = variable_labeller,
+           ncol = 2)
+
+p3 
+ggsave("/Users/thupham/Desktop/thesis/plots/cluster_size.png")
+
+
+```
+
+
+- type 4
+- p = 110
+- s = 7
+- default = 50
+- cov_x = -0.0004
+- scale = 1?
+- snr = 0.46
+
 
 
 ```{r}

@@ -45,7 +45,6 @@ sigma_r <- read.csv(paste0(root, "concat_results/icc_sigma_r.csv"))
 
 
 ```{r}
-# no NA values, so assume that each went through full 1000 reps!
 scale_collapse <- scale %>%
   group_by(scale, snr) %>%
   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
@@ -69,61 +68,6 @@ snr_collapse <- snr %>%
   ungroup() %>%
   mutate(min_agreement = mean_agreement - sd_agreement,
          max_agreement = mean_agreement + sd_agreement)
-
-# scale_high_snr <- scale %>%
-#   filter(snr > 1) %>%
-#   group_by(scale) %>%
-#   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
-#             across(reps, sum)) %>%
-#   ungroup()
-# 
-# sigma_r_low_snr <- sigma_r %>%
-#   filter(snr < 1) %>%
-#   group_by(sigma_r) %>%
-#   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
-#             across(reps, sum)) %>%
-#   ungroup()
-# 
-# sigma_r_high_snr <- sigma_r %>%
-#   filter(snr > 1) %>%
-#   group_by(sigma_r) %>%
-#   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
-#             across(reps, sum)) %>%
-#   ungroup()
-# 
-# sigma_r_snr <- rbind(sigma_r_high_snr, sigma_r_low_snr) %>%
-#   mutate(snr_level = factor(rep(c("high", "low"), 
-#                                 each = nrow(sigma_r_high_snr)))) %>%
-#   mutate(sigma_r = sigma_r^2) %>%
-#   mutate(min_agreement = mean_agreement - sd_agreement,
-#          max_agreement = mean_agreement + sd_agreement)
-# 
-# scale_snr <- rbind(scale_high_snr, scale_low_snr) %>%
-#   mutate(snr_level = factor(rep(c("high", "low"), 
-#                                 each = nrow(scale_high_snr)))) %>%
-#   mutate(min_agreement = mean_agreement - sd_agreement,
-#          max_agreement = mean_agreement + sd_agreement)
-# 
-# snr_collapse_cluster <- snr_cluster_2 %>%
-#   group_by(snr) %>%
-#   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
-#           across(reps, sum)) %>%
-#   ungroup()
-# 
-# snr_collapse_cluster <- snr_collapse_cluster %>%
-#   mutate(min_agreement = mean_agreement - sd_agreement,
-#          max_agreement = mean_agreement + sd_agreement)
-# 
-# snr_collapse <- snr %>%
-#   group_by(snr) %>%
-#   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
-#           across(reps, sum)) %>%
-#   ungroup()
-# 
-# snr_collapse <- snr_collapse %>%
-#   mutate(min_agreement = mean_agreement - sd_agreement,
-#          max_agreement = mean_agreement + sd_agreement) %>%
-#   filter(snr %in% snr_collapse_cluster$snr)
   
 ```
 

@@ -549,7 +549,7 @@ analyze <- function(train_data, test_data, p, true_beta, default, snr) {
                  "errors_best_lambda" = errors_best_lambda,
                  "errors_mixed_lasso" = errors_model_lasso_mixed)
   
-  return(c(list("adj_r_squared" = summary(basic_linear)$adj.r.squared, 
+  return(c(list("adj_r_squared" = summary(basic_linear)$r.squared, 
                 "agreement" = agreement,
                 "icc" = multilevel.icc(train_data$Y, 
                                        cluster = train_data$j)), 

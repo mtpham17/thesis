@@ -1,6 +1,6 @@
 # thesis
 
-Welcome to the GitHub repository for my thesis, "The Importance of Random Effects in Variable Selection: A Case Study of Early Childhood Education." 
+Welcome to the GitHub repository for my thesis, "The Importance of Random Effects in Weak-Signal Data: A Case Study of Early Childhood Education." 
 Below is a guide to navigating this repository.
 
 - glmmlasso_script.Rmd: code that played around with the glmmLasso, in the earlier stages of this thesis.

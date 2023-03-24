@@ -36,11 +36,11 @@ load.all.sims = function( filehead ) {
 ## read in results, which already has some slight pre-formatting ## 
 # snr varies snr and includes the four settings of different sigma_r
 # and scale value
-snr <- read.csv(paste0("/Users/thupham/Desktop/thesis/concat_results",                                 "/snr_final.csv"))
+snr <- read.csv(paste0("/Users/thupham/Desktop/thesis/results",                                 "/snr_final.csv"))
 # scale varies the scale and includes the most extreme settings of snr
-scale <- read.csv(paste0(root, "concat_results/icc_scale.csv"))
+scale <- read.csv(paste0("/Users/thupham/Desktop/thesis/results",                                 "/icc_scale.csv"))
 # sigma_r varies the cluster variance and includes the most extreme settings of snr
-sigma_r <- read.csv(paste0(root, "concat_results/icc_sigma_r.csv"))
+sigma_r <- read.csv(paste0("/Users/thupham/Desktop/thesis/results",                                 "/icc_sigma_r.csv"))
 ```
 
 
@@ -69,6 +69,14 @@ snr_collapse <- snr %>%
   mutate(min_agreement = mean_agreement - sd_agreement,
          max_agreement = mean_agreement + sd_agreement)
   
+```
+
+```{r}
+# to view average ICC and r-squared values for certain cluster settings
+
+snr_collapse %>%
+  dplyr::select(snr, mean_adj_r_squared, mean_icc
+                               sigma_r, scale)
 ```
 
 

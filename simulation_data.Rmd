@@ -39,6 +39,8 @@ load.all.sims = function( filehead ) {
 # write.csv(snr, paste0(root, "concat_results/icc_snr.csv"))
 # snr_cluster_2 <- load.all.sims(paste0(root, "results/icc_spurious_2"))
 # write.csv(snr_cluster_2, paste0(root, "concat_results/icc_cluster_2.csv"))
+# snr_final_1 <- load.all.sims(paste0(root, "results/final_snr"))
+# write.csv(snr_final_1, paste0(root, "concat_results/snr_final_1.csv"))
 ```
 
 
@@ -50,6 +52,8 @@ snr_cluster <- read.csv(paste0("/Users/thupham/Desktop/thesis/concat_results",
                                 "/icc_spurious.csv"))
 snr_cluster_2 <- read.csv(paste0("/Users/thupham/Desktop/thesis/concat_results", 
                                 "/icc_cluster_2.csv"))
+snr_final_1 <- read.csv(paste0("/Users/thupham/Desktop/thesis/concat_results", 
+                                "/snr_final_1.csv"))
 ```
 
 ```{r}
@@ -117,6 +121,48 @@ snr_collapse <- snr_collapse %>%
   filter(snr %in% snr_collapse_cluster$snr)
   
 ```
+
+
+```{r}
+snr_all <- snr_final_1 %>% 
+  group_by(snr, sigma_r, scale) %>%
+  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
+        across(reps, sum), .groups = "keep") %>%
+  ungroup()
+```
+
+
+```{r}
+snr_all <- snr_all %>%
+  mutate(min_agreement = mean_agreement - sd_agreement,
+         max_agreement = mean_agreement + sd_agreement)
+
+# snr_all
+
+snr_agreement_plot <- ggplot(snr_all, mapping = aes(x = snr,
+                        y = mean_agreement,
+                        ymin = min_agreement,
+                        ymax = max_agreement)) +
+  geom_line() + 
+  geom_point() +
+  geom_ribbon(alpha = 0.25) + 
+  ggtitle("Mean Agreement vs. Signal-to-Noise Ratio") +
+  ylab("Mean Agreement") + 
+  xlab("Signal-to-Noise Ratio") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  facet_grid(rows = vars(scale),
+             cols = vars(sigma_r),
+             labeller = label_both)
+  # scale_color_manual(name = "SNR Level",
+  #                    labels=c('High', 'Low'),
+  #                     values = c("#56B4E9", "#CC79A7"))
+
+snr_agreement_plot
+
+## TODO: import other data from other simulations into these and plot again
+  
+```
+
 
 ```{r}
 sigma_r_snr_plot <- ggplot(sigma_r_snr, mapping = aes(x = sigma_r,

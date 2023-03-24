@@ -138,7 +138,7 @@ generate_beta <- function(type, p, s, default = 1) {
   return(c(strong, (default * 0.5)^seq(1, p - s)))
 }
 
-generate_beta(4, 185, s = 87, default = 1)
+hist(generate_beta(4, 185, s = 87, default = 1))
 ```
 
 ```{r rmse}

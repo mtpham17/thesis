@@ -12,10 +12,11 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(tidyverse)
 # root <- "/n/home04/thupham17/thesis/"
-# root <- "/Users/thupham/Desktop/thesis/"
+root <- "/Users/thupham/Desktop/thesis/"
 ```
 
 ```{r}
+# use to convert from RDS to CSV file
 load.all.sims = function( filehead ) {
   
   files = list.files( filehead, full.names=TRUE)
@@ -30,120 +31,107 @@ load.all.sims = function( filehead ) {
 }
 ```
 
-```{r}
-# scale <- load.all.sims(paste0(root, "results/icc_scale/"))
-# write.csv(scale, paste0(root, "concat_results/icc_scale.csv"))
-# sigma_r <- load.all.sims(paste0(root, "results/icc_sigma_r"))
-# write.csv(sigma_r, paste0(root, "concat_results/icc_sigma_r.csv"))
-# snr <- load.all.sims(paste0(root, "results/icc_new_outcome"))
-# write.csv(snr, paste0(root, "concat_results/icc_snr.csv"))
-# snr_cluster_2 <- load.all.sims(paste0(root, "results/icc_spurious_2"))
-# write.csv(snr_cluster_2, paste0(root, "concat_results/icc_cluster_2.csv"))
-# snr_final_1 <- load.all.sims(paste0(root, "results/final_snr"))
-# write.csv(snr_final_1, paste0(root, "concat_results/snr_final_1.csv"))
-snr_final_2 <- load.all.sims(paste0(root, "results/snr_backup"))
-write.csv(snr_final_2, paste0(root, "concat_results/snr_final_2.csv"))
-snr_final_2_1 <- load.all.sims(paste0(root, "results/snr_backup_2"))
-write.csv(snr_final_2_1, paste0(root, "concat_results/snr_final_3.csv"))
-```
-
 
 ```{r}
+## read in results, which already has some slight pre-formatting ## 
+# snr varies snr and includes the four settings of different sigma_r
+# and scale value
+snr <- read.csv(paste0("/Users/thupham/Desktop/thesis/concat_results",                                 "/snr_final.csv"))
+# scale varies the scale and includes the most extreme settings of snr
 scale <- read.csv(paste0(root, "concat_results/icc_scale.csv"))
+# sigma_r varies the cluster variance and includes the most extreme settings of snr
 sigma_r <- read.csv(paste0(root, "concat_results/icc_sigma_r.csv"))
-snr <- read.csv(paste0(root, "concat_results/icc_snr.csv"))
-snr_cluster <- read.csv(paste0("/Users/thupham/Desktop/thesis/concat_results", 
-                                "/icc_spurious.csv"))
-snr_cluster_2 <- read.csv(paste0("/Users/thupham/Desktop/thesis/concat_results", 
-                                "/icc_cluster_2.csv"))
-snr_final_1 <- read.csv(paste0("/Users/thupham/Desktop/thesis/concat_results", 
-                                "/snr_final_1.csv"))
 ```
+
 
 ```{r}
 # no NA values, so assume that each went through full 1000 reps!
-scale_low_snr <- scale %>%
-  filter(snr < 1) %>%
-  group_by(scale) %>%
+scale_collapse <- scale %>%
+  group_by(scale, snr) %>%
   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
-            across(reps, sum)) %>%
-  ungroup()
-
-scale_high_snr <- scale %>%
-  filter(snr > 1) %>%
-  group_by(scale) %>%
-  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
-            across(reps, sum)) %>%
-  ungroup()
-
-sigma_r_low_snr <- sigma_r %>%
-  filter(snr < 1) %>%
-  group_by(sigma_r) %>%
-  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
-            across(reps, sum)) %>%
-  ungroup()
-
-sigma_r_high_snr <- sigma_r %>%
-  filter(snr > 1) %>%
-  group_by(sigma_r) %>%
-  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
-            across(reps, sum)) %>%
-  ungroup()
-
-sigma_r_snr <- rbind(sigma_r_high_snr, sigma_r_low_snr) %>%
-  mutate(snr_level = factor(rep(c("high", "low"), 
-                                each = nrow(sigma_r_high_snr)))) %>%
-  mutate(sigma_r = sigma_r^2) %>%
+            .groups = "keep") %>%
+  ungroup() %>%
   mutate(min_agreement = mean_agreement - sd_agreement,
          max_agreement = mean_agreement + sd_agreement)
 
-scale_snr <- rbind(scale_high_snr, scale_low_snr) %>%
-  mutate(snr_level = factor(rep(c("high", "low"), 
-                                each = nrow(scale_high_snr)))) %>%
-  mutate(min_agreement = mean_agreement - sd_agreement,
-         max_agreement = mean_agreement + sd_agreement)
-
-snr_collapse_cluster <- snr_cluster_2 %>%
-  group_by(snr) %>%
+sigma_r_collapse <- sigma_r %>%
+  group_by(sigma_r, snr) %>%
   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
-          across(reps, sum)) %>%
-  ungroup()
-
-snr_collapse_cluster <- snr_collapse_cluster %>%
+            .groups = "keep") %>%
+  ungroup() %>%
   mutate(min_agreement = mean_agreement - sd_agreement,
          max_agreement = mean_agreement + sd_agreement)
 
 snr_collapse <- snr %>%
-  group_by(snr) %>%
+  group_by(sigma_r, snr, scale) %>%
   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
-          across(reps, sum)) %>%
-  ungroup()
-
-snr_collapse <- snr_collapse %>%
+            .groups = "keep") %>%
+  ungroup() %>%
   mutate(min_agreement = mean_agreement - sd_agreement,
-         max_agreement = mean_agreement + sd_agreement) %>%
-  filter(snr %in% snr_collapse_cluster$snr)
+         max_agreement = mean_agreement + sd_agreement)
+
+# scale_high_snr <- scale %>%
+#   filter(snr > 1) %>%
+#   group_by(scale) %>%
+#   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
+#             across(reps, sum)) %>%
+#   ungroup()
+# 
+# sigma_r_low_snr <- sigma_r %>%
+#   filter(snr < 1) %>%
+#   group_by(sigma_r) %>%
+#   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
+#             across(reps, sum)) %>%
+#   ungroup()
+# 
+# sigma_r_high_snr <- sigma_r %>%
+#   filter(snr > 1) %>%
+#   group_by(sigma_r) %>%
+#   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
+#             across(reps, sum)) %>%
+#   ungroup()
+# 
+# sigma_r_snr <- rbind(sigma_r_high_snr, sigma_r_low_snr) %>%
+#   mutate(snr_level = factor(rep(c("high", "low"), 
+#                                 each = nrow(sigma_r_high_snr)))) %>%
+#   mutate(sigma_r = sigma_r^2) %>%
+#   mutate(min_agreement = mean_agreement - sd_agreement,
+#          max_agreement = mean_agreement + sd_agreement)
+# 
+# scale_snr <- rbind(scale_high_snr, scale_low_snr) %>%
+#   mutate(snr_level = factor(rep(c("high", "low"), 
+#                                 each = nrow(scale_high_snr)))) %>%
+#   mutate(min_agreement = mean_agreement - sd_agreement,
+#          max_agreement = mean_agreement + sd_agreement)
+# 
+# snr_collapse_cluster <- snr_cluster_2 %>%
+#   group_by(snr) %>%
+#   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
+#           across(reps, sum)) %>%
+#   ungroup()
+# 
+# snr_collapse_cluster <- snr_collapse_cluster %>%
+#   mutate(min_agreement = mean_agreement - sd_agreement,
+#          max_agreement = mean_agreement + sd_agreement)
+# 
+# snr_collapse <- snr %>%
+#   group_by(snr) %>%
+#   summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
+#           across(reps, sum)) %>%
+#   ungroup()
+# 
+# snr_collapse <- snr_collapse %>%
+#   mutate(min_agreement = mean_agreement - sd_agreement,
+#          max_agreement = mean_agreement + sd_agreement) %>%
+#   filter(snr %in% snr_collapse_cluster$snr)
   
 ```
 
 
 ```{r}
-snr_all <- snr_final_1 %>% 
-  group_by(snr, sigma_r, scale) %>%
-  summarize(across(mean_adj_r_squared:last_col(), ~ mean(.x, na.rm = TRUE)),
-        across(reps, sum), .groups = "keep") %>%
-  ungroup()
-```
+# agreement plot for snr and four different settings of variance x scale
 
-
-```{r}
-snr_all <- snr_all %>%
-  mutate(min_agreement = mean_agreement - sd_agreement,
-         max_agreement = mean_agreement + sd_agreement)
-
-# snr_all
-
-snr_agreement_plot <- ggplot(snr_all, mapping = aes(x = snr,
+snr_agreement_plot <- ggplot(snr_collapse, mapping = aes(x = snr,
                         y = mean_agreement,
                         ymin = min_agreement,
                         ymax = max_agreement)) +
@@ -162,19 +150,20 @@ snr_agreement_plot <- ggplot(snr_all, mapping = aes(x = snr,
   #                     values = c("#56B4E9", "#CC79A7"))
 
 snr_agreement_plot
-
-## TODO: import other data from other simulations into these and plot again
+ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
+       "faceted_agreement_snr.png"))
   
 ```
 
 
 ```{r}
-sigma_r_snr_plot <- ggplot(sigma_r_snr, mapping = aes(x = sigma_r,
+# agreement plot for sigma_r and two different settings of SNR
+sigma_r_snr_plot <- ggplot(sigma_r_collapse, mapping = aes(x = sigma_r,
                         y = mean_agreement,
                         ymin = min_agreement,
                         ymax = max_agreement,
-                        group = snr_level,
-                        color = snr_level)) +
+                        group = factor(snr),
+                        color = factor(snr))) +
   geom_line() + 
   geom_point() +
   geom_ribbon(alpha = 0.25) + 
@@ -183,19 +172,22 @@ sigma_r_snr_plot <- ggplot(sigma_r_snr, mapping = aes(x = sigma_r,
   xlab("Variance of Clusters") + 
   theme(plot.title = element_text(hjust = 0.5)) +
   scale_color_manual(name = "SNR Level",
-                     labels=c('High', 'Low'),
+                     labels=c('Higher SNR (1.28)', 'Lower SNR (0.30)'),
                       values = c("#56B4E9", "#CC79A7"))
 
 sigma_r_snr_plot
 ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
        "agreement_snr_sigma_r.png"))
+```
 
-scale_snr_plot <- ggplot(scale_snr, mapping = aes(x = scale,
+
+```{r}
+scale_snr_plot <- ggplot(scale_collapse, mapping = aes(x = scale,
                         y = mean_agreement,
                         ymin = min_agreement,
                         ymax = max_agreement,
-                        group = snr_level,
-                        color = snr_level)) +
+                        group = factor(snr),
+                        color = factor(snr))) +
   geom_line() + 
   geom_point() +
   geom_ribbon(alpha = 0.25) + 
@@ -204,7 +196,7 @@ scale_snr_plot <- ggplot(scale_snr, mapping = aes(x = scale,
   xlab("Scale") + 
   theme(plot.title = element_text(hjust = 0.5)) +
   scale_color_manual(name = "SNR Level",
-                     labels=c('High', 'Low'),
+                     labels=c('Higher SNR (1.28)', 'Lower SNR (0.30)'),
                       values = c("#56B4E9", "#CC79A7"))
 
 scale_snr_plot
@@ -223,7 +215,10 @@ agreement <- data.frame(snr = c(0.42, 0.23, 1.28),
 
 
 ```{r}
-snr_plot <- ggplot(snr_collapse, mapping = aes(x = snr,
+# plot with ELS@H data points
+snr_plot <- ggplot(snr_collapse[snr_collapse$scale == 0.75 & 
+                                  snr_collapse$sigma_r == 0.2, ], 
+                   mapping = aes(x = snr,
                         y = mean_agreement,
                         ymin = min_agreement,
                         ymax = max_agreement)) +
@@ -244,111 +239,43 @@ ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
        "agreement_snr.png"))
 ```
 
-```{r}
-snr_plot_2 <- ggplot(snr_collapse_cluster, mapping = aes(x = snr,
-                        y = mean_agreement,
-                        ymin = min_agreement,
-                        ymax = max_agreement)) +
-  geom_line(color = "#CC79A7") + 
-  geom_ribbon(alpha = 0.25) + 
-  geom_point(color = "#CC79A7") +
-  ggtitle("Mean Agreement vs. SNR") +
-  ylab("Mean Agreement") + 
-  xlab("Signal to Noise Ratio") + 
-  theme(plot.title = element_text(hjust = 0.5),
-        legend.position = 'bottom') 
-# +
-#   geom_point(data = agreement, 
-#              mapping = aes(color = outcome)) +
-#   guides(color=guide_legend(title="ELS@H Data"))
-
-snr_plot_2
-ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
-       "agreement_snr_cluster.png"))
-
-```
-```{r}
-# two agreements
-two_agreements <- rbind(snr_collapse,
-                        snr_collapse_cluster) %>%
-  mutate("cluster_var" = factor(rep(c("low", "high"), 
-                                    each = nrow(snr_collapse_cluster))))
-
-snr_plot_3 <- ggplot(two_agreements, mapping = aes(x = snr,
-                        y = mean_agreement,
-                        ymin = min_agreement,
-                        ymax = max_agreement,
-                        group = cluster_var,
-                        color = cluster_var)) +
-  geom_line() + 
-  geom_ribbon(alpha = 0.25) + 
-  geom_point() +
-  ggtitle("Mean Agreement vs. SNR") +
-  ylab("Mean Agreement") + 
-  xlab("Signal to Noise Ratio") + 
-  theme(plot.title = element_text(hjust = 0.5),
-        legend.position = 'bottom') +
-  scale_color_manual(name = "Cluster Variance",
-                   labels=c('High', 'Low'),
-                    values = c("#56B4E9", "#CC79A7")) 
-
-snr_plot_3
-ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
-       "2_agreement_snr_cluster.png"))
-```
-
 
 ```{r}
 variable_names <- list(
-  "high" = "Higher SNR (1.28)" ,
-  "low" = "Lower SNR (0.30)"
+  "1.28"  = "Higher SNR (1.28)" ,
+  "0.30" = "Lower SNR (0.30)"
 )
 
 
 variable_labeller <- function(variable, value){
   return(variable_names[value])
 }
+
+outcome_label <- list("y_rmse" = "Y RMSE",
+                      "beta_rmse" = "Beta RMSE",
+                      "s_hat" = "Number of Estimated Non-Zero Coefficients",
+                      "F1" = "F Score")
+
+x_label <- list("sigma_r" = "Variance in Cluster",
+                "scale" = "Correlation of Random Effects with Covariates",
+                "snr" = "Signal to Noise Ratio")
 ```
 
-
 ```{r}
-# fm_metrics <- colnames(sigma_r_snr %>% dplyr::select(ends_with("ixed")))
-longer_y_rmse_sigma_r <- pivot_longer(sigma_r_snr, 
-                       cols = c("mean_y_rmse_fixed",
-                                "mean_y_rmse_mixed"),
-                       names_to = "effects",
-                       values_to = "y_rmse") %>%
-  mutate(effects = substrRight(effects, 5)) %>%
-  dplyr::select(c("y_rmse", "effects", "snr_level", "sigma_r",
-           "mean_adj_r_squared", "mean_icc"))
-
-p <- ggplot(data = longer_y_rmse_sigma_r, 
-       mapping = aes(x = sigma_r^2, y = y_rmse,
-                     group = factor(effects),
-                     color = factor(effects))) + 
-  geom_point() + 
-  geom_line() +
-  ggtitle("Mean Y RMSE vs. Variance in Clusters") +
-  xlab("Variance in Clusters") + 
-  ylab("Mean Y RMSE") + 
-  theme(plot.title = element_text(hjust = 0.5),
-        legend.position = 'bottom') + 
-  scale_color_manual(name = "Effects",
-                     labels=c('Fixed-Effects LASSO', 'Mixed-Effects LASSO'),
-                      values = c("#56B4E9", "#CC79A7")) +
-  facet_wrap(~snr_level,
-             labeller = variable_labeller)
-
-p
-```
-
-
-```{r}
-
-tidy_plots_snr <- function(data, x, metric) {
+# giant function to generate all other relevant plots
+tidy_plots <- function(data, x, metric, snr_toggle = FALSE) {
   metric_colnames <- colnames(data %>% dplyr::select(contains(metric)))
+  if(!snr_toggle) {
+    other_x_vars <- "snr"
+  }
+  
+  if(snr_toggle) {
+    other_x_vars <- c("scale", "sigma_r")
+  }
+  
   data_subset <- data %>%
-    dplyr::select(c(contains(metric), x,
+    dplyr::select(c(contains(metric),
+                    x, other_x_vars,
                     "mean_adj_r_squared", "mean_icc"))
   dataset_tidy <- data_subset %>%
     pivot_longer(cols = metric_colnames, 
@@ -373,8 +300,9 @@ tidy_plots_snr <- function(data, x, metric) {
     geom_point() + 
     geom_line() +
     geom_ribbon(alpha = 0.25) +
-    ggtitle(paste("Mean", outcome_label[metric], "vs. SNR")) +
-    xlab("Signal to Noise Ratio") + 
+    ggtitle(paste("Mean", outcome_label[metric], "vs.", 
+                  x_label[x])) +
+    xlab("Signal-to-Noise-Ratio") + 
     ylab(outcome_label[metric]) + 
     theme(plot.title = element_text(hjust = 0.5,
                                     size = 10),
@@ -388,178 +316,41 @@ tidy_plots_snr <- function(data, x, metric) {
     p <- p + geom_hline(yintercept = 81, linetype = "dashed")
   }
   
-  ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
-       metric, "_", x, ".png"))
+  if (snr_toggle) {
+    p <- p + facet_grid(rows = vars(scale),
+             cols = vars(sigma_r),
+             labeller = label_both)
+  }
   
-  return(p)
-                 
-  
-}
-
-
-tidy_plots_snr(snr_collapse, "snr", "s_hat")
-tidy_plots_snr(snr_collapse, "snr", "F1")
-tidy_plots_snr(snr_collapse, "snr", "beta_rmse")
-tidy_plots_snr(snr_collapse, "snr", "y_rmse")
-
-tidy_plots_snr(snr_collapse_cluster, "snr", "s_hat")
-tidy_plots_snr(snr_collapse_cluster, "snr", "F1")
-tidy_plots_snr(snr_collapse_cluster, "snr", "beta_rmse")
-tidy_plots_snr(snr_collapse_cluster, "snr", "y_rmse")
-
-```
-
-
-```{r}
-# ggsave("/Users/thupham/Desktop/thesis/plots/F1_score.png", width = 9)
-# try to make this into a function
-
-outcome_label <- list("y_rmse" = "Y RMSE",
-                      "beta_rmse" = "Beta RMSE",
-                      "s_hat" = "Number of Estimated Non-Zero Coefficients",
-                      "F1" = "F Score")
-
-x_label <- list("sigma_r" = "Variance in Cluster",
-                "scale" = "Correlation of Random Effects with Covariates")
-
-tidy_plots <- function(data, x, metric) {
-  metric_colnames <- colnames(data %>% dplyr::select(contains(metric)))
-  data_subset <- data %>%
-    dplyr::select(c(contains(metric),
-                    "snr_level", x,
-                    "mean_adj_r_squared", "mean_icc"))
-  dataset_tidy <- data_subset %>%
-    pivot_longer(cols = metric_colnames, 
-                 names_to = c('.value', 'effects'),
-                 names_pattern = paste0("^(\\w+_",
-                                      metric,
-                                      ")_(\\w+)"))
-  
-  dataset_to_plot <- dataset_tidy %>%
-    mutate(!!paste0(metric, "_min") := get(paste0("mean_", metric)) -
-             get(paste0("sd_", metric)),
-           !!paste0(metric, "_max") := get(paste0("mean_", metric)) +
-             get(paste0("sd_", metric)))
-
-  
-  p <- ggplot(data = dataset_to_plot, 
-       mapping = aes(x = get(x), y = get(paste0("mean_", metric)),
-                     ymin = get(paste0(metric, "_min")),
-                     ymax = get(paste0(metric, "_max")),
-                     group = factor(effects),
-                     color = factor(effects))) + 
-    geom_point() + 
-    geom_line() +
-    geom_ribbon(alpha = 0.25) +
-    ggtitle(paste("Mean", outcome_label[metric], "vs.",
-                x_label[x])) +
-    xlab(x_label[x]) + 
-    ylab(outcome_label[metric]) + 
-    theme(plot.title = element_text(hjust = 0.5,
-                                    size = 10),
-        legend.position = 'bottom') + 
-    scale_color_manual(name = "Effects",
-                     labels=c('Fixed-Effects LASSO', 
-                              'Mixed-Effects LASSO'),
-                      values = c("#56B4E9", "#CC79A7")) +
-    facet_wrap(~snr_level,
+  if (!snr_toggle) {
+    p <- p + facet_wrap(~factor(snr),
              labeller = variable_labeller)
-  
-  if (metric == "s_hat") {
-    p <- p + geom_hline(yintercept = 81, linetype = "dashed")
   }
   
   p
   
-  ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
-       metric, "_", x, ".png"))
+  ggsave(paste0("/Users/thupham/Desktop/thesis/plots/new_plots/faceted_",
+       metric, "_", x, "_cluster", ".png"))
   
   return()
                  
   
 }
 
-tidy_plots(sigma_r_snr, "sigma_r", "s_hat")
-tidy_plots(sigma_r_snr, "sigma_r", "F1")
-tidy_plots(sigma_r_snr, "sigma_r", "beta_rmse")
-tidy_plots(sigma_r_snr, "sigma_r", "y_rmse")
+tidy_plots(snr_collapse, "snr", "F1", snr_toggle = TRUE)
+tidy_plots(snr_collapse, "snr", "s_hat", snr_toggle = TRUE)
+tidy_plots(snr_collapse, "snr", "y_rmse", snr_toggle = TRUE)
+tidy_plots(snr_collapse, "snr", "beta_rmse", snr_toggle = TRUE)
 
-tidy_plots(scale_snr, "scale", "s_hat")
-tidy_plots(scale_snr, "scale", "F1")
-tidy_plots(scale_snr, "scale", "beta_rmse")
-tidy_plots(scale_snr, "scale", "y_rmse")
+tidy_plots(sigma_r_collapse, "sigma_r", "F1")
+tidy_plots(sigma_r_collapse, "sigma_r", "s_hat")
+tidy_plots(sigma_r_collapse, "sigma_r", "y_rmse")
+tidy_plots(sigma_r_collapse, "sigma_r", "beta_rmse")
 
-```
-
-
-```{r}
-variable_names_2 <- list("high" = paste0("High Cluster Variance",
-                                         " and Correlation with Covariates"),
-                         "low" = paste0("Low Cluster Variance",
-                                         " and Correlation with Covariates"))
-
-variable_labeller_2 <- function(variable, value){
-  return(variable_names_2[value])
-}
-tidy_plots_snr_c <- function(data, x, metric) {
-  metric_colnames <- colnames(data %>% dplyr::select(contains(metric)))
-  data_subset <- data %>%
-    dplyr::select(c(contains(metric),
-                    "cluster_var", x,
-                    "mean_adj_r_squared", "mean_icc"))
-  dataset_tidy <- data_subset %>%
-    pivot_longer(cols = metric_colnames, 
-                 names_to = c('.value', 'effects'),
-                 names_pattern = paste0("^(\\w+_",
-                                      metric,
-                                      ")_(\\w+)"))
-  
-  dataset_to_plot <- dataset_tidy %>%
-    mutate(!!paste0(metric, "_min") := get(paste0("mean_", metric)) -
-             get(paste0("sd_", metric)),
-           !!paste0(metric, "_max") := get(paste0("mean_", metric)) +
-             get(paste0("sd_", metric)))
-
-  
-  p <- ggplot(data = dataset_to_plot, 
-       mapping = aes(x = get(x), y = get(paste0("mean_", metric)),
-                     ymin = get(paste0(metric, "_min")),
-                     ymax = get(paste0(metric, "_max")),
-                     group = factor(effects),
-                     color = factor(effects))) + 
-    geom_point() + 
-    geom_line() +
-    geom_ribbon(alpha = 0.25) +
-    ggtitle(paste("Mean", outcome_label[metric], "vs. SNR")) +
-    xlab("Signal-to-Noise-Ratio") + 
-    ylab(outcome_label[metric]) + 
-    theme(plot.title = element_text(hjust = 0.5,
-                                    size = 10),
-        legend.position = 'bottom') + 
-    scale_color_manual(name = "Effects",
-                     labels=c('Fixed-Effects LASSO', 
-                              'Mixed-Effects LASSO'),
-                      values = c("#56B4E9", "#CC79A7")) +
-    # facet_wrap(~cluster_var,
-    #          labeller = variable_labeller_2) 
-  
-  if (metric == "s_hat") {
-    p <- p + geom_hline(yintercept = 81, linetype = "dashed")
-  }
-  
-  p
-  
-  ggsave(paste0("/Users/thupham/Desktop/thesis/plots/final_plots/",
-       metric, "_snr_cluster", ".png"))
-  
-  return()
-                 
-  
-}
-
-tidy_plots_snr_c(two_agreements, "snr", "F1")
-tidy_plots_snr_c(two_agreements, "snr", "s_hat")
-tidy_plots_snr_c(two_agreements, "snr", "y_rmse")
-tidy_plots_snr_c(two_agreements, "snr", "beta_rmse")
+tidy_plots(scale_collapse, "scale", "F1")
+tidy_plots(scale_collapse, "scale", "s_hat")
+tidy_plots(scale_collapse, "scale", "y_rmse")
+tidy_plots(scale_collapse, "scale", "beta_rmse")
 
 ```
+

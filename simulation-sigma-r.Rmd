@@ -713,7 +713,7 @@ file_saving_sim = function(chunkNo, seed, reps,
 options(warn=-1)
 
 R <- 1000
-M_CHUNK <- 50
+M_CHUNK <- 100
 
 # changed J to 232, and p to 188
 params <- expand.grid(chunkNo = 1:M_CHUNK,

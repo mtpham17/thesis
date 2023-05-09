@@ -11,4 +11,5 @@ Below is a guide to navigating this repository.
 - simulation_script.rtf: the slurm script used to run the simulation on the cluster.
 - results folder: CSVs containing the final results from the simulation.
 - plots folder: plots of the results from the simulation, generated from simulation_data.Rmd.
+- PhamThu_Thesis.pdf: a final write-up of my thesis, submitted to the Statistics and Computer Science departments.
 

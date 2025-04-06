@@ -75,7 +75,7 @@ snr_collapse <- snr %>%
 # to view average ICC and r-squared values for certain cluster settings
 
 snr_collapse %>%
-  dplyr::select(snr, mean_adj_r_squared, mean_icc
+  dplyr::select(snr, mean_adj_r_squared, mean_icc,
                                sigma_r, scale)
 ```
 
@@ -210,6 +210,9 @@ outcome_label <- list("y_rmse" = "Y RMSE",
                       "precision" = "Precision",
                       "recall" = "Recall")
 
+outcome_label <- list("total_bedrooms" = "Total Bedrooms",
+                      "rented_bedrooms" = "Rented Bedrooms")
+
 x_label <- list("sigma_r" = "Variance in Cluster",
                 "scale" = "Correlation of Random Effects with Covariates",
                 "snr" = "Signal to Noise Ratio")
@@ -302,11 +305,15 @@ tidy_plots(sigma_r_collapse, "sigma_r", "F1")
 tidy_plots(sigma_r_collapse, "sigma_r", "s_hat")
 tidy_plots(sigma_r_collapse, "sigma_r", "y_rmse")
 tidy_plots(sigma_r_collapse, "sigma_r", "beta_rmse")
+tidy_plots(sigma_r_collapse, "sigma_r", "precision")
+tidy_plots(sigma_r_collapse, "sigma_r", "recall")
 
 tidy_plots(scale_collapse, "scale", "F1")
 tidy_plots(scale_collapse, "scale", "s_hat")
 tidy_plots(scale_collapse, "scale", "y_rmse")
 tidy_plots(scale_collapse, "scale", "beta_rmse")
+tidy_plots(scale_collapse, "scale", "precision")
+tidy_plots(scale_collapse, "scale", "recall")
 
 ```
 
